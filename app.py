@@ -297,3 +297,30 @@ def on_request_state():
 
 if __name__ == "__main__":
     socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+
+
+@socketio.on("rejoin")
+def on_rejoin(data):
+    """Called when a player refreshes or navigates to /game page."""
+    sid  = request.sid
+    gid  = (data.get("game_id") or "").strip().upper()
+    name = (data.get("name") or "").strip()
+
+    if gid not in games:
+        return emit("no_game", {})
+
+    g = games[gid]
+
+    # Check if this player is already in the game (same name)
+    existing = next((p for p in g["players"] if p["name"] == name), None)
+
+    if existing:
+        # Update their socket id to the new one
+        old_sid = existing["sid"]
+        player_game.pop(old_sid, None)
+        existing["sid"] = sid
+        player_game[sid] = gid
+        join_room(gid)
+        emit("game_state", state_for(g, sid))
+    else:
+        emit("no_game", {})

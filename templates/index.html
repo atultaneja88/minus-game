@@ -8,25 +8,18 @@
 <link rel="stylesheet" href="/static/css/style.css"/>
 </head>
 <body class="lobby-body">
-
-<!-- floating background suit symbols -->
 <div class="lobby-bg" aria-hidden="true">
   <span class="bg-suit s1">♠</span><span class="bg-suit s2">♥</span>
   <span class="bg-suit s3">♦</span><span class="bg-suit s4">♣</span>
   <span class="bg-suit s5">♠</span><span class="bg-suit s6">♥</span>
 </div>
-
 <div class="lobby-wrap">
-  <!-- Hero -->
   <div class="lobby-hero">
     <div class="hero-suits">♥ ♦ ♣ ♠</div>
     <h1 class="hero-title">MINUS</h1>
     <p class="hero-sub">Strategy Card Game &nbsp;·&nbsp; 2–4 Players &nbsp;·&nbsp; 10 Rounds &nbsp;·&nbsp; Lowest Score Wins</p>
   </div>
-
-  <!-- Cards -->
   <div class="lobby-cards">
-
     <div class="lcard">
       <h2>Create Game</h2>
       <p class="lcard-desc">Start a room and share the 6-letter code with friends.</p>
@@ -37,7 +30,6 @@
       <button class="btn btn-gold" id="btn-create">Create Game</button>
       <div class="err" id="create-err"></div>
     </div>
-
     <div class="lcard">
       <h2>Join Game</h2>
       <p class="lcard-desc">Enter the 6-letter code your host shared with you.</p>
@@ -53,10 +45,7 @@
       <button class="btn btn-outline" id="btn-join">Join Game</button>
       <div class="err" id="join-err"></div>
     </div>
-
   </div>
-
-  <!-- Rules quick-ref -->
   <div class="rules-ref">
     <h3>How to Play</h3>
     <div class="rules-grid">
@@ -65,12 +54,12 @@
       <div class="rule"><span>①</span><span><strong>Step 1:</strong> Select a card from your hand and discard it.</span></div>
       <div class="rule"><span>②</span><span><strong>Step 2:</strong> Draw from the hidden deck OR take the top discard.</span></div>
       <div class="rule"><span>🔁</span><span><strong>Duplicates:</strong> Discard all cards of same value at once, then draw one.</span></div>
-      <div class="rule"><span>⚡</span><span><strong>SHOW:</strong> Call at turn start (before discarding). Ends round. +25 penalty if you're not lowest!</span></div>
+      <div class="rule"><span>⚡</span><span><strong>SHOW:</strong> Call at turn start (before discarding). +25 penalty if not lowest!</span></div>
     </div>
   </div>
 </div>
 
-<!-- Waiting-in-lobby overlay (after create) -->
+<!-- Lobby waiting overlay -->
 <div class="ov hidden" id="ov-lobby">
   <div class="ov-box lobby-waiting-box">
     <h2>Waiting for Players</h2>
@@ -88,52 +77,65 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <script>
 const socket = io();
-let isHost = false;
 
-socket.on("connected", () => socket.emit("request_state"));
-socket.on("no_game",   () => {});  // stay on lobby
+// Clear any old session on lobby load
+sessionStorage.removeItem('minus_game_id');
+sessionStorage.removeItem('minus_name');
+
+socket.on("connected", () => {});
+
 socket.on("game_state", (s) => {
-  if (s.phase !== "waiting") { window.location.href = "/game"; return; }
+  if (s.phase !== "waiting") {
+    window.location.href = "/game";
+    return;
+  }
   renderLobby(s);
   document.getElementById("ov-lobby").classList.remove("hidden");
 });
-socket.on("game_created", (d) => {
-  sessionStorage.setItem("game_id", d.game_id);
-  isHost = true;
-});
-socket.on("error", (d) => showErr(d.msg));
 
-/* Create */
+socket.on("game_created", (d) => {
+  sessionStorage.setItem("minus_game_id", d.game_id);
+});
+
+socket.on("error", (d) => {
+  showErr(d.msg);
+});
+
 document.getElementById("btn-create").onclick = () => {
   const name = document.getElementById("create-name").value.trim();
   if (!name) return showErr("Please enter your name.", "create");
   clearErr();
+  sessionStorage.setItem("minus_name", name);
   socket.emit("create_game", { name });
 };
 
-/* Join */
 document.getElementById("btn-join").onclick = () => {
   const name = document.getElementById("join-name").value.trim();
   const code = document.getElementById("join-code").value.trim().toUpperCase();
   if (!name) return showErr("Please enter your name.", "join");
   if (code.length !== 6) return showErr("Enter the full 6-letter code.", "join");
   clearErr();
+  sessionStorage.setItem("minus_name", name);
+  sessionStorage.setItem("minus_game_id", code);
   socket.emit("join_game", { name, game_id: code });
 };
 
 document.getElementById("btn-start").onclick = () => socket.emit("start_game");
 
 function leaveGame() {
+  sessionStorage.removeItem('minus_game_id');
+  sessionStorage.removeItem('minus_name');
   socket.disconnect(); socket.connect();
   document.getElementById("ov-lobby").classList.add("hidden");
 }
 
 function renderLobby(s) {
   document.getElementById("big-code").textContent = s.game_id;
+  sessionStorage.setItem("minus_game_id", s.game_id);
   const list = document.getElementById("lobby-players-list");
   list.innerHTML = s.players.map(p => `
     <div class="lp-row ${p.sid === s.my_sid ? "me" : ""}">
-      ${p.sid === s.host_sid ? "<span title='Host'>👑</span>" : "<span>🃏</span>"}
+      ${p.sid === s.host_sid ? "<span>👑</span>" : "<span>🃏</span>"}
       ${p.name}${p.sid === s.my_sid ? " <em>(you)</em>" : ""}
     </div>`).join("");
   const btnStart = document.getElementById("btn-start");
@@ -161,8 +163,6 @@ function clearErr() {
     e.textContent = ""; e.style.display = "none";
   });
 }
-
-/* Enter key support */
 ["create-name"].forEach(id =>
   document.getElementById(id).addEventListener("keydown", e => e.key==="Enter" && document.getElementById("btn-create").click()));
 ["join-name","join-code"].forEach(id =>
