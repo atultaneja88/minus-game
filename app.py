@@ -19,7 +19,7 @@ from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "minus-secret-change-me")
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
+socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
 
 # ─── In-memory store ──────────────────────────────────────────
 games = {}          # game_id → game dict
