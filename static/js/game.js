@@ -11,14 +11,37 @@ socket.on('connect', () => {
   const gid  = sessionStorage.getItem('minus_game_id');
   const name = sessionStorage.getItem('minus_name');
   if (gid && name) {
-    socket.emit('rejoin', { game_id: gid, name: name });
+    socket.emit('rejoin', { game_id: gid, name: name,force_state: true });
   } else {
     window.location.href = '/';
   }
 });
 
 socket.on('no_game',    () => window.location.href = '/');
-socket.on('game_state', s  => { S = s; selIdx = -1; render(); });
+socket.on('game_state', s => {
+  S = s;
+  selIdx = -1;
+  render();
+
+  // Force overlay rendering for round end / game end
+  if (S.phase === "round_end") {
+    showRoundOv();
+  }
+
+  if (S.phase === "game_end") {
+    showGameEnd();
+  }
+});
+
+socket.on('next_round_started', s => {
+  S = s;
+  selIdx = -1;
+
+  hide('ov-round');
+  hide('ov-game');
+
+  render();
+});
 socket.on('error',      d  => toast(d.msg, 'err'));
 socket.on('player_left',d  => toast(`${d.name} disconnected.`, 'warn'));
 
