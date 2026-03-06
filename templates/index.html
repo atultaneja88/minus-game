@@ -6,71 +6,103 @@
 <title>Minus — Strategy Card Game</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Outfit:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/static/css/style.css"/>
+<style>
+/* ── Lobby extras ─────────────────────────────── */
+.lobby-top{display:flex;flex-direction:column;gap:10px;max-width:580px;width:100%}
+.name-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.name-row .field{flex:1;min-width:180px;margin:0}
+.err-msg{color:#f87171;font-size:.8rem;min-height:1.1em;margin-top:2px}
+
+/* ── Rooms list (FIX 2) ───────────────────────── */
+.rooms-wrap{max-width:580px;width:100%}
+.rooms-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.rooms-title{font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--gold)}
+.rooms-badge{font-size:.72rem;color:rgba(255,255,255,.35);letter-spacing:.5px}
+.rooms-list{display:flex;flex-direction:column;gap:8px}
+.no-rooms{color:rgba(255,255,255,.3);font-size:.84rem;text-align:center;padding:18px;
+  background:rgba(255,255,255,.04);border-radius:10px;border:1px dashed rgba(255,255,255,.1)}
+.room-row{display:flex;align-items:center;justify-content:space-between;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);
+  border-radius:12px;padding:12px 16px;gap:12px;transition:border-color .2s}
+.room-row:hover{border-color:rgba(201,168,76,.35)}
+.room-info{display:flex;flex-direction:column;gap:3px}
+.room-host{font-size:.9rem;font-weight:600;color:#f5eedc}
+.room-host span{color:var(--gold)}
+.room-slots{font-size:.74rem;color:rgba(255,255,255,.42)}
+.btn-join{background:rgba(201,168,76,.18);color:var(--gold);border:1px solid rgba(201,168,76,.35);
+  border-radius:8px;padding:8px 20px;font-family:'Outfit',sans-serif;font-size:.84rem;
+  font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-join:hover:not(:disabled){background:rgba(201,168,76,.32)}
+.btn-join:disabled{opacity:.3;cursor:not-allowed}
+</style>
 </head>
 <body class="lobby-body">
+
 <div class="lobby-bg" aria-hidden="true">
   <span class="bg-suit s1">♠</span><span class="bg-suit s2">♥</span>
   <span class="bg-suit s3">♦</span><span class="bg-suit s4">♣</span>
   <span class="bg-suit s5">♠</span><span class="bg-suit s6">♥</span>
 </div>
+
 <div class="lobby-wrap">
+
+  <!-- Hero -->
   <div class="lobby-hero">
     <div class="hero-suits">♥ ♦ ♣ ♠</div>
     <h1 class="hero-title">MINUS</h1>
-    <p class="hero-sub">Strategy Card Game &nbsp;·&nbsp; 2–4 Players &nbsp;·&nbsp; 10 Rounds &nbsp;·&nbsp; Lowest Score Wins</p>
+    <p class="hero-sub">Strategy Card Game · 2–4 Players · 10 Rounds · Lowest Score Wins</p>
   </div>
-  <div class="lobby-cards">
-    <div class="lcard">
-      <h2>Create Game</h2>
-      <p class="lcard-desc">Start a room and share the 6-letter code with friends.</p>
+
+  <!-- Name + Create -->
+  <div class="lobby-top">
+    <div class="name-row">
       <div class="field">
         <label>Your Name</label>
-        <input id="create-name" type="text" placeholder="Enter your name" maxlength="20" autocomplete="off"/>
+        <input id="player-name" type="text" placeholder="Enter your name" maxlength="20" autocomplete="off"/>
       </div>
-      <button class="btn btn-gold" id="btn-create">Create Game</button>
-      <div class="err" id="create-err"></div>
+      <button class="btn btn-gold" id="btn-create">+ Create Game</button>
     </div>
-    <div class="lcard">
-      <h2>Join Game</h2>
-      <p class="lcard-desc">Enter the 6-letter code your host shared with you.</p>
-      <div class="field">
-        <label>Your Name</label>
-        <input id="join-name" type="text" placeholder="Enter your name" maxlength="20" autocomplete="off"/>
-      </div>
-      <div class="field">
-        <label>Game Code</label>
-        <input id="join-code" type="text" placeholder="ABC123" maxlength="6" autocomplete="off"
-               style="text-transform:uppercase;letter-spacing:6px;font-size:1.4rem;text-align:center;font-family:'DM Mono',monospace"/>
-      </div>
-      <button class="btn btn-outline" id="btn-join">Join Game</button>
-      <div class="err" id="join-err"></div>
+    <div class="err-msg" id="main-err"></div>
+  </div>
+
+  <!-- FIX 2: Open rooms — click to join, no code needed -->
+  <div class="rooms-wrap">
+    <div class="rooms-hdr">
+      <span class="rooms-title">Open Games</span>
+      <span class="rooms-badge" id="rooms-badge">scanning…</span>
+    </div>
+    <div class="rooms-list" id="rooms-list">
+      <div class="no-rooms">No open games right now — create one above!</div>
     </div>
   </div>
+
+  <!-- Rules -->
   <div class="rules-ref">
     <h3>How to Play</h3>
     <div class="rules-grid">
       <div class="rule"><span>🎯</span><span><strong>Goal:</strong> Lowest cumulative score after 10 rounds wins.</span></div>
       <div class="rule"><span>🃏</span><span><strong>Cards:</strong> K=14, Q=12, J=0, A=1, numbers = face value.</span></div>
       <div class="rule"><span>①</span><span><strong>Step 1:</strong> Select a card from your hand and discard it.</span></div>
-      <div class="rule"><span>②</span><span><strong>Step 2:</strong> Draw from the hidden deck OR take the top discard.</span></div>
-      <div class="rule"><span>🔁</span><span><strong>Duplicates:</strong> Discard all cards of same value at once, then draw one.</span></div>
-      <div class="rule"><span>⚡</span><span><strong>SHOW:</strong> Call at turn start (before discarding). +25 penalty if not lowest!</span></div>
+      <div class="rule"><span>②</span><span><strong>Step 2:</strong> Draw from deck OR take the previous player's discard.</span></div>
+      <div class="rule"><span>🔁</span><span><strong>Duplicates:</strong> Discard all same-value cards at once, then draw one.</span></div>
+      <div class="rule"><span>⚡</span><span><strong>SHOW:</strong> Call before discarding. +25 penalty if not lowest!</span></div>
     </div>
   </div>
+
 </div>
 
-<!-- Lobby waiting overlay -->
+<!-- Waiting lobby overlay -->
 <div class="ov hidden" id="ov-lobby">
   <div class="ov-box lobby-waiting-box">
     <h2>Waiting for Players</h2>
     <div class="big-code" id="big-code">——</div>
-    <p class="share-note">Share this code with your friends!</p>
+    <p class="share-note">Share this code with your friends to join!</p>
     <div id="lobby-players-list" class="lobby-players-list"></div>
-    <div id="lobby-actions" class="lobby-actions">
-      <button class="btn btn-gold hidden" id="btn-start">Start Game</button>
-      <p class="wait-note" id="wait-note">Waiting for host to start…</p>
+    <div class="lobby-actions">
+      <button class="btn btn-gold hidden" id="btn-start">▶ Start Game</button>
+      <p class="wait-note" id="wait-note"></p>
     </div>
-    <button class="btn btn-ghost" onclick="leaveGame()">← Leave</button>
+    <button class="btn btn-ghost" onclick="leaveGame()" style="margin-top:10px">← Leave</button>
   </div>
 </div>
 
@@ -78,95 +110,105 @@
 <script>
 const socket = io();
 
-// Clear any old session on lobby load
-sessionStorage.removeItem('minus_game_id');
-sessionStorage.removeItem('minus_name');
+function setErr(msg){ const e=document.getElementById('main-err'); e.textContent=msg; if(msg) setTimeout(()=>e.textContent='',4000); }
 
-socket.on("connected", () => {});
+socket.on('connected', ()=>{});
 
-socket.on("game_state", (s) => {
-  if (s.phase !== "waiting") {
-    window.location.href = "/game";
+// FIX 2: server pushes room list whenever anything changes
+socket.on('rooms_list', rooms => {
+  const badge = document.getElementById('rooms-badge');
+  const list  = document.getElementById('rooms-list');
+  badge.textContent = rooms.length ? `${rooms.length} open` : 'none open';
+  if (!rooms.length) {
+    list.innerHTML = '<div class="no-rooms">No open games right now — create one above!</div>';
+    return;
+  }
+  list.innerHTML = rooms.map(r => {
+    const full = r.count >= r.max;
+    return `<div class="room-row">
+      <div class="room-info">
+        <div class="room-host">Game by <span>${r.host_name}</span></div>
+        <div class="room-slots">${r.count}/${r.max} players${full?' · Full':''}</div>
+      </div>
+      <button class="btn-join" onclick="joinRoom('${r.game_id}')" ${full?'disabled':''}>
+        ${full?'Full':'Join →'}
+      </button>
+    </div>`;
+  }).join('');
+});
+
+socket.on('game_created', d => {
+  document.getElementById('big-code').textContent = d.game_id;
+});
+
+socket.on('game_state', s => {
+  if (s.phase !== 'waiting') {
+    // game started — go to game page, save session
+    const me = s.players.find(p => p.sid === s.my_sid);
+    sessionStorage.setItem('minus_game_id', s.game_id);
+    sessionStorage.setItem('minus_name', me ? me.name : document.getElementById('player-name').value.trim());
+    window.location.href = '/game';
     return;
   }
   renderLobby(s);
-  document.getElementById("ov-lobby").classList.remove("hidden");
+  document.getElementById('ov-lobby').classList.remove('hidden');
 });
 
-socket.on("game_created", (d) => {
-  sessionStorage.setItem("minus_game_id", d.game_id);
-});
+socket.on('error', d => setErr(d.msg));
 
-socket.on("error", (d) => {
-  showErr(d.msg);
-});
-
-document.getElementById("btn-create").onclick = () => {
-  const name = document.getElementById("create-name").value.trim();
-  if (!name) return showErr("Please enter your name.", "create");
-  clearErr();
-  sessionStorage.setItem("minus_name", name);
-  socket.emit("create_game", { name });
+// Create
+document.getElementById('btn-create').onclick = () => {
+  const name = document.getElementById('player-name').value.trim();
+  if (!name) { setErr('Please enter your name first.'); return; }
+  setErr('');
+  socket.emit('create_game', { name });
 };
 
-document.getElementById("btn-join").onclick = () => {
-  const name = document.getElementById("join-name").value.trim();
-  const code = document.getElementById("join-code").value.trim().toUpperCase();
-  if (!name) return showErr("Please enter your name.", "join");
-  if (code.length !== 6) return showErr("Enter the full 6-letter code.", "join");
-  clearErr();
-  sessionStorage.setItem("minus_name", name);
-  sessionStorage.setItem("minus_game_id", code);
-  socket.emit("join_game", { name, game_id: code });
-};
+// FIX 2: Join by clicking a room — no code needed
+function joinRoom(gid) {
+  const name = document.getElementById('player-name').value.trim();
+  if (!name) { setErr('Please enter your name first.'); return; }
+  setErr('');
+  socket.emit('join_game', { name, game_id: gid });
+}
 
-document.getElementById("btn-start").onclick = () => socket.emit("start_game");
+// Start (host only)
+document.getElementById('btn-start').onclick = () => socket.emit('start_game');
 
 function leaveGame() {
   sessionStorage.removeItem('minus_game_id');
   sessionStorage.removeItem('minus_name');
   socket.disconnect(); socket.connect();
-  document.getElementById("ov-lobby").classList.add("hidden");
+  document.getElementById('ov-lobby').classList.add('hidden');
 }
 
 function renderLobby(s) {
-  document.getElementById("big-code").textContent = s.game_id;
-  sessionStorage.setItem("minus_game_id", s.game_id);
-  const list = document.getElementById("lobby-players-list");
-  list.innerHTML = s.players.map(p => `
-    <div class="lp-row ${p.sid === s.my_sid ? "me" : ""}">
-      ${p.sid === s.host_sid ? "<span>👑</span>" : "<span>🃏</span>"}
-      ${p.name}${p.sid === s.my_sid ? " <em>(you)</em>" : ""}
-    </div>`).join("");
-  const btnStart = document.getElementById("btn-start");
-  const waitNote = document.getElementById("wait-note");
-  if (s.my_sid === s.host_sid) {
-    btnStart.classList.remove("hidden");
-    btnStart.disabled = s.players.length < 2;
-    waitNote.textContent = s.players.length < 2 ? "Need at least 2 players to start…" : "";
-    waitNote.style.display = s.players.length < 2 ? "block" : "none";
+  document.getElementById('big-code').textContent = s.game_id;
+  document.getElementById('lobby-players-list').innerHTML = s.players.map(p => `
+    <div class="lp-row ${p.sid===s.my_sid?'me':''}">
+      ${p.sid===s.host_sid?'<span>👑</span>':'<span>🃏</span>'}
+      ${p.name}${p.sid===s.my_sid?' <em>(you)</em>':''}
+    </div>`).join('');
+
+  const btnStart = document.getElementById('btn-start');
+  const waitNote = document.getElementById('wait-note');
+  const isHost   = s.my_sid === s.host_sid;
+
+  if (isHost) {
+    btnStart.classList.remove('hidden');
+    btnStart.disabled    = s.players.length < 2;
+    waitNote.textContent = s.players.length < 2
+      ? `Waiting for players (${s.players.length}/2 minimum)…`
+      : `${s.players.length} players ready!`;
   } else {
-    btnStart.classList.add("hidden");
-    waitNote.textContent = "Waiting for host to start…";
-    waitNote.style.display = "block";
+    btnStart.classList.add('hidden');
+    waitNote.textContent = 'Waiting for host to start…';
   }
 }
 
-function showErr(msg, side) {
-  const id = side === "join" ? "join-err" : "create-err";
-  const el = document.getElementById(id);
-  el.textContent = msg; el.style.display = "block";
-}
-function clearErr() {
-  ["create-err","join-err"].forEach(id => {
-    const e = document.getElementById(id);
-    e.textContent = ""; e.style.display = "none";
-  });
-}
-["create-name"].forEach(id =>
-  document.getElementById(id).addEventListener("keydown", e => e.key==="Enter" && document.getElementById("btn-create").click()));
-["join-name","join-code"].forEach(id =>
-  document.getElementById(id).addEventListener("keydown", e => e.key==="Enter" && document.getElementById("btn-join").click()));
+document.getElementById('player-name').addEventListener('keydown', e => {
+  if (e.key==='Enter') document.getElementById('btn-create').click();
+});
 </script>
 </body>
 </html>
