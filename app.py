@@ -258,14 +258,29 @@ def end_round(game, show_sid=None):
 
 @socketio.on("next_round")
 def on_next_round():
-    sid = request.sid; gid = player_game.get(sid)
-    if not gid: return
+    sid = request.sid
+    gid = player_game.get(sid)
+    if not gid:
+        return
+
     g = games[gid]
-    if g["phase"] != "round_end": return emit("error",{"msg":"Not round-end phase."})
-    if g["host"] != sid:          return emit("error",{"msg":"Only host advances round."})
+
+    if g["phase"] != "round_end":
+        return emit("error", {"msg": "Not round-end phase."})
+
+    if g["host"] != sid:
+        return emit("error", {"msg": "Only host advances round."})
+
     g["round"] += 1
     start_round(g)
-    broadcast(g)
+
+    # send new round event to all players
+    for p in g["players"]:
+        socketio.emit(
+            "next_round_started",
+            state_for(g, p["sid"]),
+            to=p["sid"]
+        )
 
 @socketio.on("rejoin")
 def on_rejoin(data):
