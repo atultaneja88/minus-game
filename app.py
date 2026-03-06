@@ -17,7 +17,7 @@ VALUES     = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
 SCORE_MAP  = {"A":1,"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"J":0,"Q":12,"K":14}
 MAX_ROUNDS = 10
 HAND_SIZE  = 5
-MAX_PLAYERS= 4
+MAX_PLAYERS= 7
 MIN_PLAYERS= 2
 
 def cscore(v):    return SCORE_MAP.get(v, 0)
