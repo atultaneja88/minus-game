@@ -1,14 +1,1 @@
-from flask import Flask, send_from_directory
-
-app = Flask(__name__)
-
-@app.route("/")
-def index():
-    return send_from_directory("static", "index.html")
-
-@app.route("/game")
-def game():
-    return send_from_directory("static", "index.html")
-
-if __name__ == "__main__":
-    app.run(debug=True)
+from flask import Flask, send_from_directory\n\napp = Flask(__name__)\n\n@app.route('/')\ndef index():\n    return send_from_directory('static', 'index.html')\n\n@app.route('/game')\ndef game():\n    return send_from_directory('static', 'index.html')\n\nif __name__ == '__main__':\n    app.run(debug=True)
