@@ -3,30 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css"> <!-- Assuming there's a style file -->
     <title>Minus Game</title>
-    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
-    <style>
-        .screen { display: none; }
-        .active { display: block; }
-    </style>
 </head>
 <body>
-    <div data-screen="lobby" class="screen active">
-        <h1>Lobby</h1>
-        <button id="startGame">Start Game</button>
-        <!-- Other lobby elements go here -->
+    <div id="app">
+        <div id="lobby" class="screen">
+            <h1>Lobby</h1>
+            <button id="start-game">Start Game</button>
+            <!-- Additional lobby elements like user list, etc. -->
+        </div>
+
+        <div id="game" class="screen hidden">
+            <h1>Game</h1>
+            <div id="game-area">
+                <!-- Game content here -->
+            </div>
+            <button id="end-game">End Game</button>
+        </div>
     </div>
 
-    <div data-screen="game" class="screen">
-        <h1>Game</h1>
-        <!-- Game elements go here -->
-    </div>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.1/socket.io.min.js"></script>
     <script>
-        document.getElementById('startGame').addEventListener('click', function() {
-            document.querySelector('[data-screen="lobby"]').classList.remove('active');
-            document.querySelector('[data-screen="game"]').classList.add('active');
-        });
+        const socket = io.connect('your_socket_server'); // Replace with your actual socket server address
+
+        document.getElementById('start-game').onclick = () => {
+            document.getElementById('lobby').classList.add('hidden');
+            document.getElementById('game').classList.remove('hidden');
+            // Initialize game functionality
+        };
+
+        document.getElementById('end-game').onclick = () => {
+            document.getElementById('game').classList.add('hidden');
+            document.getElementById('lobby').classList.remove('hidden');
+            // Clean up game state if necessary
+        };
+
+        // Add more socket event listeners and game logic here
     </script>
 </body>
 </html>
