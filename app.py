@@ -9,35 +9,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "minus-secret-change-me")
 socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
 
-# ── View counter (persists in file across restarts within same deploy) ──────
-import json, threading
-_VIEW_FILE  = '/tmp/minus_views.json'
-_view_lock  = threading.Lock()
-
-def _load_views():
-    try:
-        with open(_VIEW_FILE) as f:
-            return json.load(f).get('total', 0)
-    except Exception:
-        return 0
-
-def _save_views(n):
-    try:
-        with open(_VIEW_FILE, 'w') as f:
-            json.dump({'total': n}, f)
-    except Exception:
-        pass
-
-_total_views = _load_views()
-
-def increment_views():
-    global _total_views
-    with _view_lock:
-        _total_views += 1
-        _save_views(_total_views)
-    return _total_views
-
-
 games       = {}
 player_game = {}
 
@@ -46,7 +17,7 @@ VALUES     = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
 SCORE_MAP  = {"A":1,"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"J":0,"Q":12,"K":14}
 MAX_ROUNDS = 10
 HAND_SIZE  = 5
-MAX_PLAYERS= 4
+MAX_PLAYERS= 7
 MIN_PLAYERS= 2
 
 def cscore(v):    return SCORE_MAP.get(v, 0)
@@ -151,9 +122,7 @@ def start_round(game):
     game["pre_discard_top"]  = None
 
 @app.route("/")
-def index():
-    count = increment_views()
-    return render_template("index.html", total_views=count)
+def index():     return render_template("index.html")
 @app.route("/game")
 def game_page(): return render_template("game.html")
 
