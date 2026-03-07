@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Minus — Strategy Card Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Outfit:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body class="lobby-body">
+
+<div class="lobby-bg" aria-hidden="true">
+  <span class="bg-suit s1">♠</span><span class="bg-suit s2">♥</span>
+  <span class="bg-suit s3">♦</span><span class="bg-suit s4">♣</span>
+  <span class="bg-suit s5">♠</span><span class="bg-suit s6">♥</span>
+</div>
+
+<div class="lobby-wrap">
+
+  <div class="lobby-hero">
+    <div class="hero-suits">♥ ♦ ♣ ♠</div>
+    <h1 class="hero-title">MINUS</h1>
+    <p class="hero-sub">Strategy Card Game · 2–4 Players · 10 Rounds · Lowest Score Wins</p>
+    <div class="views-badge">
+      <span class="vdot"></span>
+      <span>{{ total_views | default(0) }} total visits</span>
+    </div>
+  </div>
+
+  <!-- Name + Create -->
+  <div class="lobby-top">
+    <div class="name-row">
+      <div class="field">
+        <label>Your Name</label>
+        <input id="player-name" type="text" placeholder="Enter your name to play" maxlength="20" autocomplete="off"/>
+      </div>
+      <button class="btn btn-gold" id="btn-create">+ Create Game</button>
+    </div>
+    <div class="err-msg" id="main-err"></div>
+  </div>
+
+  <!-- Open Rooms -->
+  <div class="rooms-wrap">
+    <div class="rooms-hdr">
+      <span class="rooms-title">Open Games</span>
+      <span class="rooms-badge" id="rooms-badge">scanning…</span>
+    </div>
+    <div class="rooms-list" id="rooms-list">
+      <div class="no-rooms">No open games right now — create one above!</div>
+    </div>
+  </div>
+
+  <!-- Rules -->
+  <div class="rules-ref">
+    <h3>How to Play</h3>
+    <div class="rules-grid">
+      <div class="rule"><span>🎯</span><span><strong>Goal:</strong> Lowest cumulative score after 10 rounds wins.</span></div>
+      <div class="rule"><span>🃏</span><span><strong>Cards:</strong> K=14, Q=12, J=0, A=1, numbers = face value.</span></div>
+      <div class="rule"><span>①</span><span><strong>Step 1:</strong> Select a card from your hand and discard it.</span></div>
+      <div class="rule"><span>②</span><span><strong>Step 2:</strong> Draw from hidden deck OR take the previous discard.</span></div>
+      <div class="rule"><span>🔁</span><span><strong>Duplicates:</strong> Discard all same-value cards at once, then draw one.</span></div>
+      <div class="rule"><span>⚡</span><span><strong>SHOW:</strong> Call before discarding. +25 penalty if not lowest!</span></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Waiting lobby overlay -->
+<div class="ov hidden" id="ov-lobby">
+  <div class="ov-box lobby-waiting-box">
+    <h2>Waiting for Players</h2>
+    <div class="big-code" id="big-code">——</div>
+    <p class="share-note">Share this code with your friends!</p>
+    <div id="lobby-players-list" class="lobby-players-list"></div>
+    <div class="lobby-actions">
+      <button class="btn btn-gold hidden" id="btn-start">▶ Start Game</button>
+      <p class="wait-note" id="wait-note"></p>
+    </div>
+    <button class="btn btn-ghost" onclick="leaveGame()" style="margin-top:10px">← Leave</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const socket = io();
+
+function setErr(msg){ const e=document.getElementById('main-err'); e.textContent=msg; if(msg) setTimeout(()=>e.textContent='',4000); }
+
+socket.on('connected', ()=>{});
+
+socket.on('rooms_list', rooms => {
+  const badge = document.getElementById('rooms-badge');
+  const list  = document.getElementById('rooms-list');
+  badge.textContent = rooms.length ? `${rooms.length} open` : 'none open';
+  if (!rooms.length) {
+    list.innerHTML = '<div class="no-rooms">No open games right now — create one above!</div>';
+    return;
+  }
+  list.innerHTML = rooms.map(r => {
+    const full = r.count >= r.max;
+    return `<div class="room-row">
+      <div class="room-info">
+        <div class="room-host">Game by <span>${r.host_name}</span></div>
+        <div class="room-slots">${r.count}/${r.max} players${full?' · Full':''}</div>
+      </div>
+      <button class="btn-join" onclick="joinRoom('${r.game_id}')" ${full?'disabled':''}>
+        ${full?'Full':'Join →'}
+      </button>
+    </div>`;
+  }).join('');
+});
+
+socket.on('game_created', d => {
+  document.getElementById('big-code').textContent = d.game_id;
+});
+
+socket.on('game_state', s => {
+  if (s.phase !== 'waiting') {
+    const me = s.players.find(p => p.sid === s.my_sid);
+    sessionStorage.setItem('minus_game_id', s.game_id);
+    sessionStorage.setItem('minus_name', me ? me.name : document.getElementById('player-name').value.trim());
+    window.location.href = '/game';
+    return;
+  }
+  renderLobby(s);
+  document.getElementById('ov-lobby').classList.remove('hidden');
+});
+
+socket.on('error', d => setErr(d.msg));
+
+document.getElementById('btn-create').onclick = () => {
+  const name = document.getElementById('player-name').value.trim();
+  if (!name) { setErr('Please enter your name first.'); return; }
+  setErr('');
+  socket.emit('create_game', { name });
+};
+
+function joinRoom(gid) {
+  const name = document.getElementById('player-name').value.trim();
+  if (!name) { setErr('Please enter your name first.'); return; }
+  setErr('');
+  socket.emit('join_game', { name, game_id: gid });
+}
+
+document.getElementById('btn-start').onclick = () => socket.emit('start_game');
+
+function leaveGame() {
+  sessionStorage.removeItem('minus_game_id');
+  sessionStorage.removeItem('minus_name');
+  socket.disconnect(); socket.connect();
+  document.getElementById('ov-lobby').classList.add('hidden');
+}
+
+function renderLobby(s) {
+  document.getElementById('big-code').textContent = s.game_id;
+  document.getElementById('lobby-players-list').innerHTML = s.players.map(p => `
+    <div class="lp-row ${p.sid===s.my_sid?'me':''}">
+      ${p.sid===s.host_sid?'<span>👑</span>':'<span>🃏</span>'}
+      ${p.name}${p.sid===s.my_sid?' <em>(you)</em>':''}
+    </div>`).join('');
+  const btnStart = document.getElementById('btn-start');
+  const waitNote = document.getElementById('wait-note');
+  if (s.my_sid === s.host_sid) {
+    btnStart.classList.remove('hidden');
+    btnStart.disabled = s.players.length < 2;
+    waitNote.textContent = s.players.length < 2
+      ? `Waiting for players (${s.players.length}/2 minimum)…`
+      : `${s.players.length} players ready!`;
+  } else {
+    btnStart.classList.add('hidden');
+    waitNote.textContent = 'Waiting for host to start…';
+  }
+}
+
+document.getElementById('player-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-create').click();
+});
+</script>
+</body>
+</html>
