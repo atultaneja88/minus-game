@@ -58,7 +58,7 @@ function selCard(i) {
 // ── Master render ─────────────────────────────────────────────
 function render() {
   if (!S) return;
-  renderHUD(); renderSidebar(); renderOpponents(); renderPiles();
+  renderHUD(); renderSidebar(); renderScoreBar(); renderOpponents(); renderPiles();
   renderMyHand(); renderButtons(); renderDupPanel(); renderHint();
   if      (S.phase==='round_end') showRoundOv();
   else if (S.phase==='game_end')  showGameEnd();
@@ -93,6 +93,18 @@ function renderSidebar() {
       <span class="sb-pts">${p.score}</span>
     </div>`).join('');
 }
+
+function renderScoreBar() {
+  const bar = document.getElementById('score-bar');
+  if (!bar) return;
+  const sorted = [...S.players].sort((a,b)=>a.score-b.score);
+  bar.innerHTML = sorted.map((p,r)=>`
+    <div class="sbar-item ${p.sid===S.my_sid?'me':''} ${r===0?'lead':''}">
+      <div class="sbar-name">${p.sid===S.my_sid?'You':p.name}</div>
+      <div class="sbar-pts">${p.score}</div>
+    </div>`).join('');
+}
+
 
 function renderOpponents() {
   const others=S.players.filter(p=>p.sid!==S.my_sid);
