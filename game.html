@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>Minus — Playing</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Outfit:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body class="game-body">
+
+<div id="toast" class="toast hidden"></div>
+
+<header id="hud">
+  <div class="hud-left">
+    <span class="hud-logo">M<em>INUS</em></span>
+    <span class="hud-round" id="round-lbl">Round 1/10</span>
+  </div>
+  <div id="turn-banner" class="tb-idle">—</div>
+  <div id="phase-pill" class="pp-idle">—</div>
+  <div class="hud-right">
+    <span class="code-label">Code:</span>
+    <span class="code-chip" id="code-chip">——</span>
+    <button class="btn-copy" id="btn-copy" title="Copy code">⧉</button>
+  </div>
+</header>
+
+<div id="layout">
+  <aside id="sidebar">
+    <div class="sb-hdr">Scores</div>
+    <div id="sb-rows"></div>
+  </aside>
+
+  <main id="table">
+    <div id="opponents"></div>
+
+    <div id="piles-row">
+      <div class="pile-grp">
+        <div class="pile-lbl">Draw Deck</div>
+        <div id="deck-el"></div>
+        <div class="pile-cnt" id="deck-cnt">52 cards</div>
+      </div>
+      <div class="pile-grp">
+        <div class="pile-lbl">Discard Pile</div>
+        <div id="discard-el"></div>
+      </div>
+    </div>
+
+    <div id="actions">
+      <button class="btn btn-show" id="btn-show" disabled>⚡ SHOW</button>
+      <button class="btn btn-disc" id="btn-disc" disabled>① Discard Selected</button>
+      <button class="btn btn-draw" id="btn-draw" disabled>② Draw from Deck</button>
+      <button class="btn btn-take" id="btn-take" disabled>② Take Discard</button>
+    </div>
+
+    <div id="dup-panel" class="hidden">
+      <span class="dup-lbl">Discard Duplicates:</span>
+      <div id="dup-btns"></div>
+    </div>
+
+    <div id="hint"></div>
+
+    <div id="my-section">
+      <div class="my-lbl">Your Hand <span class="htbadge" id="htotal">0 pts</span></div>
+      <div id="my-hand"></div>
+    </div>
+  </main>
+</div>
+
+<div id="show-modal" class="show-modal hidden">
+  <div class="show-modal-box">
+    <div class="sm-icon">⚡</div>
+    <div class="sm-title">Call SHOW?</div>
+    <div class="sm-body">
+      The round ends <strong>immediately</strong> and all hands are revealed.<br/><br/>
+      If you <strong>don't have the lowest hand</strong>, you receive a <strong>+25 penalty!</strong>
+    </div>
+    <div class="sm-btns">
+      <button class="btn btn-ghost" onclick="closeShow()">Cancel</button>
+      <button class="btn-confirm-show" onclick="confirmShow()">⚡ Yes, SHOW!</button>
+    </div>
+  </div>
+</div>
+
+<div class="ov hidden" id="ov-round"><div class="ov-box" id="ov-rbox"></div></div>
+<div class="ov hidden" id="ov-game">
+  <canvas id="confetti-canvas"></canvas>
+  <div class="ov-box" id="ov-gbox"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/static/js/game.js"></script>
+</body>
+</html>
