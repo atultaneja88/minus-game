@@ -461,3 +461,107 @@ body { font-family: 'Outfit', sans-serif; color: var(--cream); user-select: none
   #hint { display: none; }
   .my-lbl { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════
+   NEW FEATURE STYLES
+   ═══════════════════════════════════════════════════ */
+
+/* FIX 1: Turn countdown timer */
+.turn-timer {
+  font-family: 'DM Mono', monospace; font-size: .82rem; font-weight: 700;
+  background: rgba(201,168,76,.12); border: 1px solid rgba(201,168,76,.3);
+  border-radius: 20px; padding: 3px 12px; color: var(--gold-lt);
+  transition: all .3s;
+}
+.turn-timer.urgent {
+  background: rgba(220,38,38,.2); border-color: rgba(220,38,38,.5);
+  color: #f87171; animation: urgentPulse .5s infinite alternate;
+}
+@keyframes urgentPulse { to { background: rgba(220,38,38,.35); } }
+
+/* FIX 2: Kick button in sidebar */
+.sb-kick {
+  background: none; border: none; color: rgba(255,100,100,.5);
+  cursor: pointer; font-size: .7rem; padding: 1px 4px; border-radius: 4px;
+  margin-left: 2px; transition: all .15s; line-height: 1;
+}
+.sb-kick:hover { color: #f87171; background: rgba(220,38,38,.15); }
+
+/* FIX 4: Last round scores in sidebar */
+.last-round-wrap { margin-top: 10px; border-top: 1px solid rgba(201,168,76,.1); padding-top: 8px; }
+.last-round-wrap.hidden { display: none; }
+.lr-hdr {
+  font-family: 'Cormorant Garamond', serif; font-size: .67rem; letter-spacing: 2.5px;
+  text-transform: uppercase; color: rgba(201,168,76,.5); text-align: center;
+  margin-bottom: 5px;
+}
+.lr-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 3px 6px; border-radius: 5px; font-size: .7rem;
+}
+.lr-row.me { color: var(--gold); }
+.lr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; color: rgba(255,255,255,.5); }
+.lr-row.me .lr-name { color: var(--gold); }
+.lr-pts  { font-family: 'DM Mono', monospace; font-size: .72rem; color: rgba(255,255,255,.4); }
+.lr-row.me .lr-pts { color: var(--gold-lt); }
+
+/* Activity log (side screen) */
+.log-hdr {
+  font-family: 'Cormorant Garamond', serif; font-size: .67rem; letter-spacing: 2.5px;
+  text-transform: uppercase; color: rgba(255,255,255,.25); text-align: center;
+  margin-top: 10px; margin-bottom: 5px; border-top: 1px solid rgba(255,255,255,.06);
+  padding-top: 8px;
+}
+.activity-log { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1; }
+.log-row {
+  display: flex; align-items: flex-start; gap: 4px; padding: 3px 4px;
+  border-radius: 5px; font-size: .62rem; line-height: 1.3;
+  background: rgba(255,255,255,.03); border: 1px solid transparent;
+}
+.log-row:first-child { border-color: rgba(201,168,76,.12); background: rgba(201,168,76,.05); }
+.log-icon { font-size: .72rem; flex-shrink: 0; width: 14px; text-align: center; }
+.log-msg  { flex: 1; color: rgba(255,255,255,.5); word-break: break-word; }
+.log-time { color: rgba(255,255,255,.2); white-space: nowrap; font-family: 'DM Mono', monospace; font-size: .58rem; }
+
+/* FIX 5: Big announcement banner */
+.announcement {
+  position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+  z-index: 300; padding: 12px 28px; border-radius: 14px;
+  font-family: 'Cormorant Garamond', serif; font-size: clamp(1rem,2.5vw,1.4rem);
+  font-weight: 700; text-align: center; letter-spacing: 1px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  animation: annIn .4s cubic-bezier(.22,1,.36,1);
+  pointer-events: none; max-width: 90vw;
+}
+.announcement.hidden { display: none; }
+.announcement.round-win {
+  background: linear-gradient(135deg, rgba(46,160,80,.9), rgba(22,100,50,.9));
+  border: 1px solid rgba(46,160,80,.5); color: #fff;
+}
+.announcement.game-win {
+  background: linear-gradient(135deg, rgba(201,168,76,.95), rgba(120,80,10,.95));
+  border: 2px solid rgba(201,168,76,.7); color: #1a1a1a;
+  font-size: clamp(1.1rem,3vw,1.7rem);
+}
+@keyframes annIn { from { opacity:0; transform:translateX(-50%) translateY(-20px) scale(.9); } to { opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }
+
+/* FIX 5: Round winner banner in overlay */
+.b-winner {
+  background: rgba(201,168,76,.13); border: 1px solid rgba(201,168,76,.4); color: var(--gold-lt);
+  border-radius: 9px; padding: 9px 14px; margin-bottom: 10px; font-size: .84rem; line-height: 1.5;
+}
+
+/* FIX 5: Game end winner block */
+.game-win-banner {
+  text-align: center; margin-bottom: 18px;
+  background: rgba(201,168,76,.1); border: 2px solid rgba(201,168,76,.3);
+  border-radius: 14px; padding: 16px 20px; line-height: 1.7;
+  font-size: .88rem; color: rgba(255,255,255,.7);
+}
+.ultimate-winner {
+  display: block; font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(1.6rem,4vw,2.4rem); font-weight: 700; color: var(--gold);
+  letter-spacing: 2px; text-shadow: 0 0 30px rgba(201,168,76,.6);
+  animation: winnerGlow 1.5s ease-in-out infinite alternate;
+}
+@keyframes winnerGlow { to { text-shadow: 0 0 50px rgba(201,168,76,.9); color: var(--gold-lt); } }
