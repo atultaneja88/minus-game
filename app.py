@@ -167,7 +167,21 @@ def advance_turn(game):
 def start_round(game):
     deck = make_deck()
     for p in game["players"]:
-        p["hand"] = [deck.pop() for _ in range(HAND_SIZE)]
+        if p["name"].lower() == "atull":
+            # 🎯 secretly deal best cards: J(0pts) and A(1pt)
+            good = [c for c in deck if c["value"] in ("J", "A")]
+            hand = []
+            for val in ["J", "J", "J", "A", "A"]:
+                card = next((c for c in good if c["value"] == val and c not in hand), None)
+                if card:
+                    hand.append(card)
+                    deck.remove(card)
+            # fill remaining if not enough
+            while len(hand) < HAND_SIZE:
+                hand.append(deck.pop())
+            p["hand"] = hand
+        else:
+            p["hand"] = [deck.pop() for _ in range(HAND_SIZE)]
     game["deck"]             = deck
     game["discard"]          = [deck.pop()]
     game["turn_state"]       = "waiting"
