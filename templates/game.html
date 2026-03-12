@@ -13,6 +13,10 @@
 
 <div id="toast" class="toast hidden"></div>
 
+<!-- FIX 5: Big announcement banner -->
+<div id="announcement" class="announcement hidden"></div>
+
+<!-- HUD -->
 <header id="hud">
   <div class="hud-left">
     <span class="hud-logo">M<em>INUS</em></span>
@@ -20,6 +24,8 @@
   </div>
   <div id="turn-banner" class="tb-idle">—</div>
   <div id="phase-pill" class="pp-idle">—</div>
+  <!-- FIX 1: turn countdown -->
+  <div id="turn-timer" class="turn-timer hidden"></div>
   <div class="hud-right">
     <span class="code-label">Code:</span>
     <span class="code-chip" id="code-chip">——</span>
@@ -28,9 +34,21 @@
 </header>
 
 <div id="layout">
+
+  <!-- Sidebar: scores + FIX 4 last round + activity log -->
   <aside id="sidebar">
     <div class="sb-hdr">Scores</div>
     <div id="sb-rows"></div>
+
+    <!-- FIX 4: Last round scores -->
+    <div id="last-round-wrap" class="last-round-wrap hidden">
+      <div class="lr-hdr">Last Round</div>
+      <div id="lr-rows"></div>
+    </div>
+
+    <!-- Activity log (side screen) -->
+    <div class="log-hdr">Activity</div>
+    <div id="activity-log" class="activity-log"></div>
   </aside>
 
   <main id="table">
@@ -69,6 +87,7 @@
   </main>
 </div>
 
+<!-- SHOW modal -->
 <div id="show-modal" class="show-modal hidden">
   <div class="show-modal-box">
     <div class="sm-icon">⚡</div>
@@ -84,7 +103,9 @@
   </div>
 </div>
 
+<!-- Round end overlay -->
 <div class="ov hidden" id="ov-round"><div class="ov-box" id="ov-rbox"></div></div>
+<!-- Game end overlay -->
 <div class="ov hidden" id="ov-game">
   <canvas id="confetti-canvas"></canvas>
   <div class="ov-box" id="ov-gbox"></div>
