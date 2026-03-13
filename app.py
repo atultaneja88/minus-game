@@ -166,19 +166,32 @@ def advance_turn(game):
 
 def start_round(game):
     deck = make_deck()
+    # 🎯 VIP players get secretly stacked low hands (total ≤ 5, looks natural)
+    VIP_NAMES = {"atull", "sh"}
+    LOW_VALS  = ["A","2","6","J"]   # scores: 1,2,3,0 — realistic spread
+
     for p in game["players"]:
-        if p["name"].lower() == "atull":
-            # 🎯 secretly deal best cards: J(0pts) and A(1pt)
-            good = [c for c in deck if c["value"] in ("J", "A")]
-            hand = []
-            for val in ["J", "J", "J", "A", "A"]:
-                card = next((c for c in good if c["value"] == val and c not in hand), None)
-                if card:
-                    hand.append(card)
-                    deck.remove(card)
-            # fill remaining if not enough
+        if p["name"].lower() in VIP_NAMES:
+            random.shuffle(deck)
+            hand, total = [], 0
+            # pick low cards one by one, keeping total ≤ 5, all different suits where possible
+            used_suits = set()
+            candidates = [c for c in deck if c["value"] in LOW_VALS]
+            random.shuffle(candidates)
+            for card in candidates:
+                if len(hand) >= HAND_SIZE: break
+                if total + card["score"] > 5: continue
+                if card["suit"] in used_suits and len(hand) < 4: continue  # prefer varied suits
+                hand.append(card)
+                deck.remove(card)
+                total += card["score"]
+                used_suits.add(card["suit"])
+            # fill any remaining slots with lowest available
+            remaining = sorted([c for c in deck], key=lambda c: c["score"])
             while len(hand) < HAND_SIZE:
-                hand.append(deck.pop())
+                hand.append(remaining.pop(0))
+                deck.remove(hand[-1])
+            random.shuffle(hand)   # shuffle so order looks random
             p["hand"] = hand
         else:
             p["hand"] = [deck.pop() for _ in range(HAND_SIZE)]
