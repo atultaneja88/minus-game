@@ -5,90 +5,31 @@ const isRed = s => s==='H'||s==='D';
 let S       = null;
 let selIdx  = -1;
 let confRAF = null;
-let timerRAF= null;
 
-// ── Speech (FIX 1 & 5) ───────────────────────────────────────
-function speak(text, rate=0.92, pitch=1.0) {
-  try {
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = rate; u.pitch = pitch; u.volume = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  } catch(e) {}
-}
-
-function announceRoundWinner(name, isMe) {
-  const nm = isMe ? 'You' : name;
-  speak(`${nm} won the round! Boom!`, 0.85, 1.1);
-  showAnnouncement(`🏅 ${isMe ? 'You' : name} won the round!`, 'round-win');
-}
-
-function announceGameWinner(name, isMe) {
-  const nm = isMe ? 'You' : name;
-  speak(`And the ultimate winner of the game isssss... ${nm}... BOOOOOOMMMM!`, 0.8, 1.15);
-  showAnnouncement(`🏆 ULTIMATE WINNER: ${isMe ? 'You' : name}! BOOOOOMM! 🎉`, 'game-win');
-}
-
-function announceTurn(name, isMe) {
-  speak(isMe ? "It's your turn!" : `It's ${name}'s turn`, 1.0, 1.0);
-}
-
-// ── Connect / reconnect ───────────────────────────────────────
+// On connect — rejoin via sessionStorage
 socket.on('connect', () => {
   const gid  = sessionStorage.getItem('minus_game_id');
   const name = sessionStorage.getItem('minus_name');
-  if (gid && name) socket.emit('rejoin', { game_id: gid, name });
-  else window.location.href = '/';
+  if (gid && name) {
+    socket.emit('rejoin', { game_id: gid, name });
+  } else {
+    window.location.href = '/';
+  }
 });
 
 socket.on('no_game',    () => window.location.href = '/');
-socket.on('kicked',     d  => { alert(d.msg); sessionStorage.clear(); window.location.href = '/'; });
 socket.on('error',      d  => toast(d.msg, 'err'));
-socket.on('player_left',d  => { toast(`${d.name} disconnected.`, 'warn'); addLog(`${d.name} left the game`, '⚠️'); });
-socket.on('player_kicked', d => { toast(`${d.name} was removed.`, 'warn'); addLog(`${d.name} was kicked`, '🚫'); });
-socket.on('turn_timeout',  d => { toast(`⏱️ ${d.player_name}'s turn timed out — auto-played!`, 'warn'); addLog(`${d.player_name} timed out`, '⏱️'); });
-
-let _lastTurnSid = null;
-let _lastPhase   = null;
-let _lastRound   = null;
+socket.on('player_left',d  => toast(`${d.name} disconnected.`, 'warn'));
 
 socket.on('game_state', s => {
-  const prevSid   = _lastTurnSid;
-  const prevPhase = _lastPhase;
-  const prevRound = _lastRound;
   S = s; selIdx = -1;
-
-  // FIX 1: announce turn change
-  if (s.phase === 'playing' && s.current_player_sid !== prevSid) {
-    _lastTurnSid = s.current_player_sid;
-    announceTurn(s.current_player_name, s.current_player_sid === s.my_sid);
-    addLog(`${s.current_player_name}'s turn`, '▶');
-  }
-
-  // FIX 5: announce round winner when round ends
-  if (s.phase === 'round_end' && prevPhase === 'playing') {
-    const rr = s.round_result;
-    if (rr && rr.round_winner_name) {
-      const isMe = rr.round_winner_sid === s.my_sid;
-      if (s.round < s.max_rounds) announceRoundWinner(rr.round_winner_name, isMe);
-    }
-  }
-
-  // FIX 5: announce game winner
-  if (s.phase === 'game_end' && prevPhase !== 'game_end') {
-    const sorted = [...s.players].sort((a,b)=>a.score-b.score);
-    const winner = sorted[0];
-    announceGameWinner(winner.name, winner.sid === s.my_sid);
-  }
-
-  _lastPhase = s.phase;
-  _lastRound = s.round;
   render();
 });
 
 // ── Buttons ───────────────────────────────────────────────────
 document.getElementById('btn-show').onclick = () => {
   if (!S||!isMyTurn()||S.turn_state!=='waiting') return;
+  if (!S.can_show) { toast("SHOW is blocked on the first turn of each round!", 'warn'); return; }
   document.getElementById('show-modal').classList.remove('hidden');
 };
 document.getElementById('btn-disc').onclick = () => {
@@ -100,15 +41,14 @@ document.getElementById('btn-take').onclick = () => socket.emit('take_discard');
 document.getElementById('btn-copy').onclick = () => {
   if (!S) return;
   navigator.clipboard.writeText(S.game_id)
-    .then(()=>toast('Code copied!','info'))
+    .then(()=>toast('Game code copied!','info'))
     .catch(()=>toast(S.game_id,'info'));
 };
 
 function closeShow()   { document.getElementById('show-modal').classList.add('hidden'); }
-function confirmShow() { closeShow(); if(!S||!isMyTurn()||S.turn_state!=='waiting') return; socket.emit('show'); }
+function confirmShow() { closeShow(); if(!S||!isMyTurn()||S.turn_state!=='waiting'||!S.can_show) return; socket.emit('show'); }
 function dupDiscard(v) { socket.emit('discard_duplicates',{value:v}); }
 function nextRound()   { socket.emit('next_round'); }
-function kickPlayer(targetSid) { if(confirm('Remove this player?')) socket.emit('kick_player',{target_sid:targetSid}); }
 
 function selCard(i) {
   if (!isMyTurn()||S.turn_state!=='waiting') return;
@@ -119,9 +59,8 @@ function selCard(i) {
 // ── Master render ─────────────────────────────────────────────
 function render() {
   if (!S) return;
-  renderHUD(); renderSidebar(); renderOpponents(); renderPiles();
+  renderHUD(); renderSidebar(); renderScoreBar(); renderOpponents(); renderPiles();
   renderMyHand(); renderButtons(); renderDupPanel(); renderHint();
-  renderTimer();
   if      (S.phase==='round_end') showRoundOv();
   else if (S.phase==='game_end')  showGameEnd();
   else { hide('ov-round'); hide('ov-game'); }
@@ -146,57 +85,27 @@ function renderHUD() {
   }
 }
 
-// FIX 1: turn countdown timer ─────────────────────────────────
-function renderTimer() {
-  const el = document.getElementById('turn-timer');
-  if (!el) return;
-  if (cancelAnimationFrame) cancelAnimationFrame(timerRAF);
-  if (S.phase !== 'playing' || S.turn_state !== 'waiting' || !S.turn_deadline) {
-    el.textContent = '';
-    el.className = 'turn-timer hidden';
-    return;
-  }
-  function tick() {
-    const secs = Math.max(0, Math.ceil(S.turn_deadline - Date.now()/1000));
-    el.textContent = `⏱ ${secs}s`;
-    el.className = `turn-timer ${secs <= 10 ? 'urgent' : ''}`;
-    if (secs > 0) timerRAF = requestAnimationFrame(tick);
-    else { el.textContent = '⏱ 0s'; el.className = 'turn-timer urgent'; }
-  }
-  tick();
-}
-
 function renderSidebar() {
   const sorted=[...S.players].sort((a,b)=>a.score-b.score);
-  const isHost = S.my_sid === S.host_sid;
-
-  // Scores
-  document.getElementById('sb-rows').innerHTML = sorted.map((p,r)=>{
-    const kickBtn = isHost && p.sid !== S.my_sid
-      ? `<button class="sb-kick" onclick="kickPlayer('${p.sid}')" title="Remove player">✕</button>`
-      : '';
-    return `<div class="sb-row ${p.sid===S.my_sid?'me':''} ${r===0?'lead':''}">
+  document.getElementById('sb-rows').innerHTML=sorted.map((p,r)=>`
+    <div class="sb-row ${p.sid===S.my_sid?'me':''} ${r===0?'lead':''}">
       <span class="sb-rank">${r+1}</span>
       <span class="sb-name">${p.sid===S.my_sid?'You':p.name}</span>
       <span class="sb-pts">${p.score}</span>
-      ${kickBtn}
-    </div>`;
-  }).join('');
-
-  // FIX 4: last round scores
-  const lr = S.last_round_result;
-  const lrEl = document.getElementById('last-round-wrap');
-  if (lr && S.phase === 'playing' && lrEl) {
-    lrEl.classList.remove('hidden');
-    document.getElementById('lr-rows').innerHTML = S.players.map(p=>`
-      <div class="lr-row ${p.sid===S.my_sid?'me':''}">
-        <span class="lr-name">${p.sid===S.my_sid?'You':p.name}</span>
-        <span class="lr-pts">+${lr.round_pts[p.name]??0}</span>
-      </div>`).join('');
-  } else if (lrEl) {
-    lrEl.classList.add('hidden');
-  }
+    </div>`).join('');
 }
+
+function renderScoreBar() {
+  const bar = document.getElementById('score-bar');
+  if (!bar) return;
+  const sorted = [...S.players].sort((a,b)=>a.score-b.score);
+  bar.innerHTML = sorted.map((p,r)=>`
+    <div class="sbar-item ${p.sid===S.my_sid?'me':''} ${r===0?'lead':''}">
+      <div class="sbar-name">${p.sid===S.my_sid?'You':p.name}</div>
+      <div class="sbar-pts">${p.score}</div>
+    </div>`).join('');
+}
+
 
 function renderOpponents() {
   const others=S.players.filter(p=>p.sid!==S.my_sid);
@@ -224,8 +133,11 @@ function renderPiles() {
     ?`<div class="card card-back"><div class="cbp"></div></div>`
     :`<div class="card-empty">Empty</div>`;
   document.getElementById('deck-cnt').textContent=`${S.deck_count} card${S.deck_count!==1?'s':''}`;
+  // FIX 3: discard_top is already the correct card from server
+  // (pre_discard_top during step 2 for the current player)
   const canTake=isMyTurn()&&S.phase==='playing'
-              &&(S.turn_state==='discarded'||S.turn_state==='dup_draw')&&!!S.discard_top;
+              &&(S.turn_state==='discarded'||S.turn_state==='dup_draw')
+              &&!!S.discard_top;
   document.getElementById('discard-el').innerHTML=S.discard_top
     ?cHTML(S.discard_top,false,canTake)
     :`<div class="card-empty">Empty</div>`;
@@ -248,7 +160,7 @@ function renderMyHand() {
 function renderButtons() {
   const my=isMyTurn()&&S.phase==='playing';
   const ts=S.turn_state;
-  setDis('btn-show',!(my&&ts==='waiting'));
+  setDis('btn-show',!(my&&ts==='waiting'&&S.can_show));
   setDis('btn-disc',!(my&&ts==='waiting'&&selIdx>=0));
   setDis('btn-draw',!(my&&(ts==='discarded'||ts==='dup_draw')));
   setDis('btn-take',!(my&&(ts==='discarded'||ts==='dup_draw')&&!!S.discard_top));
@@ -273,56 +185,23 @@ function renderHint() {
   const el=document.getElementById('hint');
   if (!isMyTurn()||S.phase!=='playing'){el.textContent='';el.className='';return;}
   const msgs={
-    waiting:'① Click a card to select it, then "Discard Selected" — or call ⚡ SHOW.',
-    discarded:'② Draw from deck, or click the glowing card to take the previous discard.',
-    dup_draw:'② You discarded duplicates! Now draw one card.',
+    waiting:   S.can_show
+      ? '① Click a card to select it, then "Discard Selected" — or call ⚡ SHOW.'
+      : '① Click a card to select it, then "Discard Selected". ⚡ SHOW is blocked on the first turn.',
+    discarded: '② Draw from deck, or click the glowing card to take the previous discard.',
+    dup_draw:  '② You discarded duplicates! Now draw one card.',
   };
   el.textContent=msgs[S.turn_state]||''; el.className='';
 }
 
-// ── Activity log (side screen) ────────────────────────────────
-const _log = [];
-function addLog(msg, icon='ℹ') {
-  _log.unshift({msg, icon, t: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})});
-  if (_log.length > 30) _log.pop();
-  const el = document.getElementById('activity-log');
-  if (!el) return;
-  el.innerHTML = _log.map(e=>`
-    <div class="log-row">
-      <span class="log-icon">${e.icon}</span>
-      <span class="log-msg">${e.msg}</span>
-      <span class="log-time">${e.t}</span>
-    </div>`).join('');
-}
-
-// ── Big announcement banner ───────────────────────────────────
-let _annTimer = null;
-function showAnnouncement(msg, type='round-win') {
-  const el = document.getElementById('announcement');
-  if (!el) return;
-  el.textContent = msg;
-  el.className = `announcement ${type}`;
-  el.classList.remove('hidden');
-  clearTimeout(_annTimer);
-  _annTimer = setTimeout(()=>el.classList.add('hidden'), type==='game-win'?8000:4000);
-}
-
-// ── Round overlay ─────────────────────────────────────────────
+// ── Round / Game end overlays ─────────────────────────────────
 function showRoundOv() {
   const r=S.round_result; if(!r) return;
   show('ov-round'); hide('ov-game');
   const isEnd  = S.round>=S.max_rounds;
+  // FIX 1: host_sid is now correctly updated on rejoin, so this works
   const isHost = S.my_sid===S.host_sid;
-  const winner = r.round_winner_name;
-  const isWinnerMe = r.round_winner_sid === S.my_sid;
-
   let html=`<div class="ov-title">Round ${S.round} Complete</div>`;
-
-  // FIX 5: Round winner announcement in overlay
-  if (winner) {
-    html += `<div class="banner b-winner">🏅 <b>${isWinnerMe?'You':winner}</b> won Round ${S.round}! ${isEnd?'':'They go first next round.'}</div>`;
-  }
-
   if (r.show_caller_name) {
     const isMe=r.show_caller_sid===S.my_sid, nm=isMe?'You':r.show_caller_name;
     html+=r.penalty
@@ -334,10 +213,9 @@ function showRoundOv() {
   </thead><tbody>`;
   S.players.forEach(p=>{
     const nm=p.name, isMe=p.sid===S.my_sid, isPen=r.penalty&&r.show_caller_sid===p.sid;
-    const isRoundWin=p.sid===r.round_winner_sid;
     const hs=(p.hand||[]).map(c=>`${c.value}${SYM[c.suit]}`).join(' ');
-    html+=`<tr class="${isMe?'me-row':''} ${isPen?'pen-row':''} ${isRoundWin?'win-row':''}">
-      <td>${isMe?'You':nm}${isRoundWin?' 🏅':''}</td><td class="hstr">${hs}</td>
+    html+=`<tr class="${isMe?'me-row':''} ${isPen?'pen-row':''}">
+      <td>${isMe?'You':nm}</td><td class="hstr">${hs}</td>
       <td>${r.totals[nm]??0}</td>
       <td>${r.round_pts[nm]??0}${isPen?' (+25⚠️)':''}</td>
       <td><b>${r.cumulative[nm]??0}</b></td></tr>`;
@@ -346,29 +224,25 @@ function showRoundOv() {
   if (isEnd)
     html+=`<button class="btn-cta" onclick="showGameEnd()">See Final Results →</button>`;
   else if (isHost)
+    // FIX 1: host correctly sees this button now
     html+=`<button class="btn-cta" onclick="nextRound()">▶ Next Round (${S.round+1}/${S.max_rounds})</button>`;
   else
     html+=`<p style="text-align:center;color:rgba(255,255,255,.5);font-size:.85rem;margin-top:8px">⏳ Waiting for host to start next round…</p>`;
   document.getElementById('ov-rbox').innerHTML=html;
 }
 
-// ── Game end overlay ──────────────────────────────────────────
 function showGameEnd() {
   hide('ov-round'); show('ov-game');
   const sorted=[...S.players].sort((a,b)=>a.score-b.score);
   const medals=['🥇','🥈','🥉'], winner=sorted[0];
   let html=`<div class="ov-title">🏆 Game Over!</div>
-    <div class="game-win-banner">
-      And the ultimate winner of the game isssss…<br/>
-      <span class="ultimate-winner">${winner.sid===S.my_sid?'🎉 YOU! 🎉':winner.name}</span>
-      <br/>BOOOOOOMMM! 🎆
-    </div>
+    <p class="win-line">${winner.sid===S.my_sid?'🎉 <span class="wname">You win!</span>':`<span class="wname">${winner.name}</span> wins!`} — ${winner.score} pts</p>
     <table class="rtbl"><thead><tr><th>Rank</th><th>Player</th><th>Total Score</th></tr></thead><tbody>`;
   sorted.forEach((p,i)=>{
     html+=`<tr class="${i===0?'win-row':''} ${p.sid===S.my_sid?'me-row':''}">
       <td>${medals[i]||`${i+1}.`}</td><td>${p.sid===S.my_sid?'You':p.name}</td><td>${p.score}</td></tr>`;
   });
-  html+=`</tbody></table><button class="btn-cta" onclick="window.location.href='/'">← Play Again</button>`;
+  html+=`</tbody></table><button class="btn-cta" onclick="window.location.href='/'">← Back to Lobby</button>`;
   document.getElementById('ov-gbox').innerHTML=html;
   startConfetti();
 }
@@ -411,5 +285,5 @@ function startConfetti(){
     });
     confRAF=requestAnimationFrame(draw);
   }
-  draw(); setTimeout(()=>{if(confRAF){cancelAnimationFrame(confRAF);confRAF=null;}ctx.clearRect(0,0,W,H);},10000);
+  draw(); setTimeout(()=>{if(confRAF){cancelAnimationFrame(confRAF);confRAF=null;}ctx.clearRect(0,0,W,H);},8000);
 }
