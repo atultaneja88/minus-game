@@ -7,7 +7,7 @@ let selIdx  = -1;
 let confRAF = null;
 let timerRAF= null;
 
-// ── Speech (FIX 1 & 5) ───────────────────────────────────────
+// ── Speech ────────────────────────────────────────────────────
 function speak(text, rate=0.92, pitch=1.0) {
   try {
     const u = new SpeechSynthesisUtterance(text);
@@ -18,14 +18,12 @@ function speak(text, rate=0.92, pitch=1.0) {
 }
 
 function announceRoundWinner(name, isMe) {
-  const nm = isMe ? 'You' : name;
-  speak(`${nm} won the round! Boom!`, 0.85, 1.1);
+  speak(`${isMe ? 'You' : name} won the round! Boom!`, 0.85, 1.1);
   showAnnouncement(`🏅 ${isMe ? 'You' : name} won the round!`, 'round-win');
 }
 
 function announceGameWinner(name, isMe) {
-  const nm = isMe ? 'You' : name;
-  speak(`And the ultimate winner of the game isssss... ${nm}... BOOOOOOMMMM!`, 0.8, 1.15);
+  speak(`And the ultimate winner of the game isssss... ${isMe ? 'You' : name}... BOOOOOOMMMM!`, 0.8, 1.15);
   showAnnouncement(`🏆 ULTIMATE WINNER: ${isMe ? 'You' : name}! BOOOOOMM! 🎉`, 'game-win');
 }
 
@@ -55,17 +53,14 @@ let _lastRound   = null;
 socket.on('game_state', s => {
   const prevSid   = _lastTurnSid;
   const prevPhase = _lastPhase;
-  const prevRound = _lastRound;
   S = s; selIdx = -1;
 
-  // FIX 1: announce turn change
   if (s.phase === 'playing' && s.current_player_sid !== prevSid) {
     _lastTurnSid = s.current_player_sid;
     announceTurn(s.current_player_name, s.current_player_sid === s.my_sid);
     addLog(`${s.current_player_name}'s turn`, '▶');
   }
 
-  // FIX 5: announce round winner when round ends
   if (s.phase === 'round_end' && prevPhase === 'playing') {
     const rr = s.round_result;
     if (rr && rr.round_winner_name) {
@@ -74,11 +69,9 @@ socket.on('game_state', s => {
     }
   }
 
-  // FIX 5: announce game winner
   if (s.phase === 'game_end' && prevPhase !== 'game_end') {
     const sorted = [...s.players].sort((a,b)=>a.score-b.score);
-    const winner = sorted[0];
-    announceGameWinner(winner.name, winner.sid === s.my_sid);
+    announceGameWinner(sorted[0].name, sorted[0].sid === s.my_sid);
   }
 
   _lastPhase = s.phase;
@@ -88,31 +81,39 @@ socket.on('game_state', s => {
 
 // ── Buttons ───────────────────────────────────────────────────
 document.getElementById('btn-show').onclick = () => {
-  if (!S||!isMyTurn()||S.turn_state!=='waiting') return;
+  if (!S || !isMyTurn() || S.turn_state !== 'waiting') return;
+  if (!S.can_show) {
+    toast('⛔ You must discard a card before you can SHOW!', 'warn');
+    // Shake the SHOW button to give tactile feedback
+    const btn = document.getElementById('btn-show');
+    btn.classList.add('shake');
+    setTimeout(() => btn.classList.remove('shake'), 600);
+    return;
+  }
   document.getElementById('show-modal').classList.remove('hidden');
 };
 document.getElementById('btn-disc').onclick = () => {
-  if (selIdx<0) { toast('Select a card in your hand first!','warn'); return; }
-  socket.emit('discard_card',{card_index:selIdx}); selIdx=-1;
+  if (selIdx < 0) { toast('Select a card in your hand first!', 'warn'); return; }
+  socket.emit('discard_card', {card_index: selIdx}); selIdx = -1;
 };
 document.getElementById('btn-draw').onclick = () => socket.emit('draw_from_deck');
 document.getElementById('btn-take').onclick = () => socket.emit('take_discard');
 document.getElementById('btn-copy').onclick = () => {
   if (!S) return;
   navigator.clipboard.writeText(S.game_id)
-    .then(()=>toast('Code copied!','info'))
-    .catch(()=>toast(S.game_id,'info'));
+    .then(() => toast('Code copied!', 'info'))
+    .catch(() => toast(S.game_id, 'info'));
 };
 
 function closeShow()   { document.getElementById('show-modal').classList.add('hidden'); }
 function confirmShow() { closeShow(); if(!S||!isMyTurn()||S.turn_state!=='waiting') return; socket.emit('show'); }
-function dupDiscard(v) { socket.emit('discard_duplicates',{value:v}); }
+function dupDiscard(v) { socket.emit('discard_duplicates', {value: v}); }
 function nextRound()   { socket.emit('next_round'); }
-function kickPlayer(targetSid) { if(confirm('Remove this player?')) socket.emit('kick_player',{target_sid:targetSid}); }
+function kickPlayer(targetSid) { if(confirm('Remove this player?')) socket.emit('kick_player', {target_sid: targetSid}); }
 
 function selCard(i) {
-  if (!isMyTurn()||S.turn_state!=='waiting') return;
-  selIdx = selIdx===i?-1:i;
+  if (!isMyTurn() || S.turn_state !== 'waiting') return;
+  selIdx = selIdx === i ? -1 : i;
   renderMyHand(); renderButtons();
 }
 
@@ -122,42 +123,44 @@ function render() {
   renderHUD(); renderSidebar(); renderOpponents(); renderPiles();
   renderMyHand(); renderButtons(); renderDupPanel(); renderHint();
   renderTimer();
-  if      (S.phase==='round_end') showRoundOv();
-  else if (S.phase==='game_end')  showGameEnd();
+  if      (S.phase === 'round_end') showRoundOv();
+  else if (S.phase === 'game_end')  showGameEnd();
   else { hide('ov-round'); hide('ov-game'); }
 }
 
 function renderHUD() {
   document.getElementById('round-lbl').textContent = `Round ${S.round}/${S.max_rounds}`;
   document.getElementById('code-chip').textContent = S.game_id;
-  const banner=document.getElementById('turn-banner');
-  const pill  =document.getElementById('phase-pill');
-  if (S.phase!=='playing') {
-    banner.textContent='Round Over'; banner.className='tb-idle';
-    pill.textContent=''; pill.className='pp-idle'; return;
+  const banner = document.getElementById('turn-banner');
+  const pill   = document.getElementById('phase-pill');
+  if (S.phase !== 'playing') {
+    banner.textContent = 'Round Over'; banner.className = 'tb-idle';
+    pill.textContent = ''; pill.className = 'pp-idle'; return;
   }
   if (isMyTurn()) {
-    banner.textContent='⭐ Your Turn!'; banner.className='tb-mine';
-    if (S.turn_state==='waiting') { pill.textContent='① Discard or ⚡ SHOW'; pill.className='pp-step1'; }
-    else                          { pill.textContent='② Draw or Take'; pill.className='pp-step2'; }
+    banner.textContent = '⭐ Your Turn!'; banner.className = 'tb-mine';
+    if (S.turn_state === 'waiting') {
+      pill.textContent = S.can_show ? '① Discard or ⚡ SHOW' : '① Discard a card first';
+      pill.className   = S.can_show ? 'pp-step1' : 'pp-step1 pp-locked';
+    } else {
+      pill.textContent = '② Draw or Take'; pill.className = 'pp-step2';
+    }
   } else {
-    banner.innerHTML=`${S.current_player_name} <span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
-    banner.className='tb-other'; pill.textContent='Waiting…'; pill.className='pp-idle';
+    banner.innerHTML = `${S.current_player_name} <span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
+    banner.className = 'tb-other'; pill.textContent = 'Waiting…'; pill.className = 'pp-idle';
   }
 }
 
-// FIX 1: turn countdown timer ─────────────────────────────────
+// ── Turn countdown timer ──────────────────────────────────────
 function renderTimer() {
   const el = document.getElementById('turn-timer');
   if (!el) return;
-  if (cancelAnimationFrame) cancelAnimationFrame(timerRAF);
+  if (timerRAF) { cancelAnimationFrame(timerRAF); timerRAF = null; }
   if (S.phase !== 'playing' || S.turn_state !== 'waiting' || !S.turn_deadline) {
-    el.textContent = '';
-    el.className = 'turn-timer hidden';
-    return;
+    el.textContent = ''; el.className = 'turn-timer hidden'; return;
   }
   function tick() {
-    const secs = Math.max(0, Math.ceil(S.turn_deadline - Date.now()/1000));
+    const secs = Math.max(0, Math.ceil(S.turn_deadline - Date.now() / 1000));
     el.textContent = `⏱ ${secs}s`;
     el.className = `turn-timer ${secs <= 10 ? 'urgent' : ''}`;
     if (secs > 0) timerRAF = requestAnimationFrame(tick);
@@ -167,31 +170,29 @@ function renderTimer() {
 }
 
 function renderSidebar() {
-  const sorted=[...S.players].sort((a,b)=>a.score-b.score);
+  const sorted = [...S.players].sort((a,b) => a.score - b.score);
   const isHost = S.my_sid === S.host_sid;
 
-  // Scores
-  document.getElementById('sb-rows').innerHTML = sorted.map((p,r)=>{
+  document.getElementById('sb-rows').innerHTML = sorted.map((p, r) => {
     const kickBtn = isHost && p.sid !== S.my_sid
       ? `<button class="sb-kick" onclick="kickPlayer('${p.sid}')" title="Remove player">✕</button>`
       : '';
-    return `<div class="sb-row ${p.sid===S.my_sid?'me':''} ${r===0?'lead':''}">
-      <span class="sb-rank">${r+1}</span>
-      <span class="sb-name">${p.sid===S.my_sid?'You':p.name}</span>
+    return `<div class="sb-row ${p.sid === S.my_sid ? 'me' : ''} ${r === 0 ? 'lead' : ''}">
+      <span class="sb-rank">${r === 0 ? '👑' : r + 1}</span>
+      <span class="sb-name">${p.sid === S.my_sid ? 'You' : p.name}</span>
       <span class="sb-pts">${p.score}</span>
       ${kickBtn}
     </div>`;
   }).join('');
 
-  // FIX 4: last round scores
-  const lr = S.last_round_result;
+  const lr   = S.last_round_result;
   const lrEl = document.getElementById('last-round-wrap');
   if (lr && S.phase === 'playing' && lrEl) {
     lrEl.classList.remove('hidden');
-    document.getElementById('lr-rows').innerHTML = S.players.map(p=>`
-      <div class="lr-row ${p.sid===S.my_sid?'me':''}">
-        <span class="lr-name">${p.sid===S.my_sid?'You':p.name}</span>
-        <span class="lr-pts">+${lr.round_pts[p.name]??0}</span>
+    document.getElementById('lr-rows').innerHTML = S.players.map(p => `
+      <div class="lr-row ${p.sid === S.my_sid ? 'me' : ''}">
+        <span class="lr-name">${p.sid === S.my_sid ? 'You' : p.name}</span>
+        <span class="lr-pts">+${lr.round_pts[p.name] ?? 0}</span>
       </div>`).join('');
   } else if (lrEl) {
     lrEl.classList.add('hidden');
@@ -199,20 +200,22 @@ function renderSidebar() {
 }
 
 function renderOpponents() {
-  const others=S.players.filter(p=>p.sid!==S.my_sid);
-  const rev=S.phase==='round_end'||S.phase==='game_end';
-  document.getElementById('opponents').innerHTML=others.map(p=>{
-    const active=p.is_current&&S.phase==='playing';
+  const others = S.players.filter(p => p.sid !== S.my_sid);
+  const rev    = S.phase === 'round_end' || S.phase === 'game_end';
+  document.getElementById('opponents').innerHTML = others.map(p => {
+    const active = p.is_current && S.phase === 'playing';
     let cards;
-    if (rev&&p.hand) {
-      const t=p.hand.reduce((s,c)=>s+c.score,0);
-      cards=p.hand.map(c=>cHTML(c,true)).join('')
-           +`<div style="font-size:.67rem;color:var(--gold);margin-top:3px;font-family:'DM Mono',monospace">${t} pts</div>`;
+    if (rev && p.hand) {
+      const t = p.hand.reduce((s,c) => s + c.score, 0);
+      cards = p.hand.map(c => cHTML(c, true)).join('')
+            + `<div class="reveal-total">${t} pts</div>`;
     } else {
-      cards=Array(p.hand_count).fill(`<div class="card card-back card-sm"><div class="cbp"></div></div>`).join('');
+      cards = Array(p.hand_count).fill(
+        `<div class="card card-back card-sm"><div class="cbp"></div></div>`
+      ).join('');
     }
-    return `<div class="opp ${active?'active':''}">
-      <div class="opp-name ${active?'active':''}">${active?'▶ ':''}${p.name}</div>
+    return `<div class="opp ${active ? 'active' : ''}">
+      <div class="opp-name ${active ? 'active' : ''}">${active ? '▶ ' : ''}${p.name}</div>
       <div class="opp-cards">${cards}</div>
       <div class="opp-score">Score: ${p.score}</div>
     </div>`;
@@ -220,25 +223,32 @@ function renderOpponents() {
 }
 
 function renderPiles() {
-  document.getElementById('deck-el').innerHTML=S.deck_count>0
-    ?`<div class="card card-back"><div class="cbp"></div></div>`
-    :`<div class="card-empty">Empty</div>`;
-  document.getElementById('deck-cnt').textContent=`${S.deck_count} card${S.deck_count!==1?'s':''}`;
-  const canTake=isMyTurn()&&S.phase==='playing'
-              &&(S.turn_state==='discarded'||S.turn_state==='dup_draw')&&!!S.discard_top;
-  document.getElementById('discard-el').innerHTML=S.discard_top
-    ?cHTML(S.discard_top,false,canTake)
-    :`<div class="card-empty">Empty</div>`;
+  document.getElementById('deck-el').innerHTML = S.deck_count > 0
+    ? `<div class="card card-back"><div class="cbp"></div></div>`
+    : `<div class="card-empty">Empty</div>`;
+  document.getElementById('deck-cnt').textContent = `${S.deck_count} card${S.deck_count !== 1 ? 's' : ''}`;
+  const canTake = isMyTurn() && S.phase === 'playing'
+               && (S.turn_state === 'discarded' || S.turn_state === 'dup_draw') && !!S.discard_top;
+  document.getElementById('discard-el').innerHTML = S.discard_top
+    ? cHTML(S.discard_top, false, canTake)
+    : `<div class="card-empty">Empty</div>`;
 }
 
 function renderMyHand() {
-  const hand=S.my_hand||[];
-  const total=hand.reduce((s,c)=>s+c.score,0);
-  document.getElementById('htotal').textContent=`${total} pts`;
-  const canSel=isMyTurn()&&S.phase==='playing'&&S.turn_state==='waiting';
-  document.getElementById('my-hand').innerHTML=hand.map((c,i)=>`
-    <div class="card card-face ${isRed(c.suit)?'red':'blk'} ${canSel?'sel-able':''} ${i===selIdx?'selected':''} deal"
-         style="animation-delay:${i*.04}s" onclick="${canSel?`selCard(${i})`:''}">
+  const hand  = S.my_hand || [];
+  const total = hand.reduce((s,c) => s + c.score, 0);
+  document.getElementById('htotal').textContent = `${total} pts`;
+
+  // Colour-code total: green = low (good), amber = medium, red = high (bad)
+  const htEl = document.getElementById('htotal');
+  htEl.style.color = total <= 10 ? 'var(--ok-green, #2ecc71)'
+                   : total <= 25 ? 'var(--gold, #c9a84c)'
+                   : 'var(--danger, #e74c3c)';
+
+  const canSel = isMyTurn() && S.phase === 'playing' && S.turn_state === 'waiting';
+  document.getElementById('my-hand').innerHTML = hand.map((c, i) => `
+    <div class="card card-face ${isRed(c.suit) ? 'red' : 'blk'} ${canSel ? 'sel-able' : ''} ${i === selIdx ? 'selected' : ''} deal"
+         style="animation-delay:${i * .04}s" onclick="${canSel ? `selCard(${i})` : ''}">
       <div class="cc tl">${c.value}<br/>${SYM[c.suit]}</div>
       <div class="card-mid">${SYM[c.suit]}</div>
       <div class="cc br">${c.value}<br/>${SYM[c.suit]}</div>
@@ -246,48 +256,68 @@ function renderMyHand() {
 }
 
 function renderButtons() {
-  const my=isMyTurn()&&S.phase==='playing';
-  const ts=S.turn_state;
-  setDis('btn-show',!(my&&ts==='waiting'));
-  setDis('btn-disc',!(my&&ts==='waiting'&&selIdx>=0));
-  setDis('btn-draw',!(my&&(ts==='discarded'||ts==='dup_draw')));
-  setDis('btn-take',!(my&&(ts==='discarded'||ts==='dup_draw')&&!!S.discard_top));
-  document.getElementById('btn-disc').classList.toggle('active-step',my&&ts==='waiting');
-  document.getElementById('btn-draw').classList.toggle('active-step',my&&(ts==='discarded'||ts==='dup_draw'));
+  const my = isMyTurn() && S.phase === 'playing';
+  const ts = S.turn_state;
+
+  // SHOW is disabled if not my turn, not waiting phase, OR can_show is false
+  const showAllowed = my && ts === 'waiting' && !!S.can_show;
+  setDis('btn-show', !showAllowed);
+
+  // Visual cue: dim + lock icon when SHOW is blocked specifically due to first-turn rule
+  const showBtn = document.getElementById('btn-show');
+  if (showBtn) {
+    if (my && ts === 'waiting' && !S.can_show) {
+      showBtn.classList.add('show-locked');
+      showBtn.title = 'Discard a card first before you can SHOW';
+    } else {
+      showBtn.classList.remove('show-locked');
+      showBtn.title = '';
+    }
+  }
+
+  setDis('btn-disc', !(my && ts === 'waiting' && selIdx >= 0));
+  setDis('btn-draw', !(my && (ts === 'discarded' || ts === 'dup_draw')));
+  setDis('btn-take', !(my && (ts === 'discarded' || ts === 'dup_draw') && !!S.discard_top));
+  document.getElementById('btn-disc').classList.toggle('active-step', my && ts === 'waiting');
+  document.getElementById('btn-draw').classList.toggle('active-step', my && (ts === 'discarded' || ts === 'dup_draw'));
 }
 
 function renderDupPanel() {
-  const panel=document.getElementById('dup-panel');
-  const show=isMyTurn()&&S.phase==='playing'&&S.turn_state==='waiting';
-  if (!show){panel.classList.add('hidden');return;}
-  const counts={};
-  (S.my_hand||[]).forEach(c=>{counts[c.value]=(counts[c.value]||0)+1;});
-  const dups=Object.entries(counts).filter(([,n])=>n>=2);
-  if (!dups.length){panel.classList.add('hidden');return;}
+  const panel = document.getElementById('dup-panel');
+  const show  = isMyTurn() && S.phase === 'playing' && S.turn_state === 'waiting';
+  if (!show) { panel.classList.add('hidden'); return; }
+  const counts = {};
+  (S.my_hand || []).forEach(c => { counts[c.value] = (counts[c.value] || 0) + 1; });
+  const dups = Object.entries(counts).filter(([,n]) => n >= 2);
+  if (!dups.length) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
-  document.getElementById('dup-btns').innerHTML=dups.map(([v,n])=>
-    `<button class="btn btn-dup" onclick="dupDiscard('${v}')">${v}×${n} Discard All</button>`).join('');
+  document.getElementById('dup-btns').innerHTML = dups.map(([v,n]) =>
+    `<button class="btn btn-dup" onclick="dupDiscard('${v}')">${v}×${n} Discard All</button>`
+  ).join('');
 }
 
 function renderHint() {
-  const el=document.getElementById('hint');
-  if (!isMyTurn()||S.phase!=='playing'){el.textContent='';el.className='';return;}
-  const msgs={
-    waiting:'① Click a card to select it, then "Discard Selected" — or call ⚡ SHOW.',
-    discarded:'② Draw from deck, or click the glowing card to take the previous discard.',
-    dup_draw:'② You discarded duplicates! Now draw one card.',
+  const el = document.getElementById('hint');
+  if (!isMyTurn() || S.phase !== 'playing') { el.textContent = ''; el.className = ''; return; }
+  const msgs = {
+    waiting:   S.can_show
+                 ? '① Click a card to select it, then "Discard Selected" — or call ⚡ SHOW.'
+                 : '① Discard a card first — you cannot SHOW on your very first turn.',
+    discarded: '② Draw from deck, or click the glowing card to take the previous discard.',
+    dup_draw:  '② You discarded duplicates! Now draw one card.',
   };
-  el.textContent=msgs[S.turn_state]||''; el.className='';
+  el.textContent = msgs[S.turn_state] || '';
+  el.className   = (!S.can_show && S.turn_state === 'waiting') ? 'hint-locked' : '';
 }
 
-// ── Activity log (side screen) ────────────────────────────────
+// ── Activity log ──────────────────────────────────────────────
 const _log = [];
 function addLog(msg, icon='ℹ') {
   _log.unshift({msg, icon, t: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})});
   if (_log.length > 30) _log.pop();
   const el = document.getElementById('activity-log');
   if (!el) return;
-  el.innerHTML = _log.map(e=>`
+  el.innerHTML = _log.map(e => `
     <div class="log-row">
       <span class="log-icon">${e.icon}</span>
       <span class="log-msg">${e.msg}</span>
@@ -304,112 +334,186 @@ function showAnnouncement(msg, type='round-win') {
   el.className = `announcement ${type}`;
   el.classList.remove('hidden');
   clearTimeout(_annTimer);
-  _annTimer = setTimeout(()=>el.classList.add('hidden'), type==='game-win'?8000:4000);
+  _annTimer = setTimeout(() => el.classList.add('hidden'), type === 'game-win' ? 8000 : 4000);
 }
 
 // ── Round overlay ─────────────────────────────────────────────
 function showRoundOv() {
-  const r=S.round_result; if(!r) return;
+  const r = S.round_result; if (!r) return;
   show('ov-round'); hide('ov-game');
-  const isEnd  = S.round>=S.max_rounds;
-  const isHost = S.my_sid===S.host_sid;
+  const isEnd  = S.round >= S.max_rounds;
+  const isHost = S.my_sid === S.host_sid;
   const winner = r.round_winner_name;
   const isWinnerMe = r.round_winner_sid === S.my_sid;
 
-  let html=`<div class="ov-title">Round ${S.round} Complete</div>`;
+  let html = `<div class="ov-title">Round ${S.round} Complete</div>`;
 
-  // FIX 5: Round winner announcement in overlay
   if (winner) {
-    html += `<div class="banner b-winner">🏅 <b>${isWinnerMe?'You':winner}</b> won Round ${S.round}! ${isEnd?'':'They go first next round.'}</div>`;
+    html += `<div class="banner b-winner">🏅 <b>${isWinnerMe ? 'You' : winner}</b> won Round ${S.round}! ${isEnd ? '' : 'They go first next round.'}</div>`;
   }
 
   if (r.show_caller_name) {
-    const isMe=r.show_caller_sid===S.my_sid, nm=isMe?'You':r.show_caller_name;
-    html+=r.penalty
-      ?`<div class="banner b-fail">⚠️ <b>${nm}</b> called SHOW but didn't have the lowest hand! +25 penalty.</div>`
-      :`<div class="banner b-ok">✅ <b>${nm}</b> called SHOW and had the lowest hand!</div>`;
+    const isMe = r.show_caller_sid === S.my_sid, nm = isMe ? 'You' : r.show_caller_name;
+    html += r.penalty
+      ? `<div class="banner b-fail">⚠️ <b>${nm}</b> called SHOW but didn't have the lowest hand! +25 penalty.</div>`
+      : `<div class="banner b-ok">✅ <b>${nm}</b> called SHOW and had the lowest hand!</div>`;
   }
-  html+=`<table class="rtbl"><thead>
+
+  html += `<table class="rtbl"><thead>
     <tr><th>Player</th><th>Hand</th><th>Total</th><th>Round +</th><th>Cumulative</th></tr>
   </thead><tbody>`;
-  S.players.forEach(p=>{
-    const nm=p.name, isMe=p.sid===S.my_sid, isPen=r.penalty&&r.show_caller_sid===p.sid;
-    const isRoundWin=p.sid===r.round_winner_sid;
-    const hs=(p.hand||[]).map(c=>`${c.value}${SYM[c.suit]}`).join(' ');
-    html+=`<tr class="${isMe?'me-row':''} ${isPen?'pen-row':''} ${isRoundWin?'win-row':''}">
-      <td>${isMe?'You':nm}${isRoundWin?' 🏅':''}</td><td class="hstr">${hs}</td>
-      <td>${r.totals[nm]??0}</td>
-      <td>${r.round_pts[nm]??0}${isPen?' (+25⚠️)':''}</td>
-      <td><b>${r.cumulative[nm]??0}</b></td></tr>`;
+  S.players.forEach(p => {
+    const nm = p.name, isMe = p.sid === S.my_sid;
+    const isPen    = r.penalty && r.show_caller_sid === p.sid;
+    const isRoundW = p.sid === r.round_winner_sid;
+    const hs = (p.hand || []).map(c => `${c.value}${SYM[c.suit]}`).join(' ');
+    html += `<tr class="${isMe ? 'me-row' : ''} ${isPen ? 'pen-row' : ''} ${isRoundW ? 'win-row' : ''}">
+      <td>${isMe ? 'You' : nm}${isRoundW ? ' 🏅' : ''}</td>
+      <td class="hstr">${hs}</td>
+      <td>${r.totals[nm] ?? 0}</td>
+      <td>${r.round_pts[nm] ?? 0}${isPen ? ' (+25⚠️)' : ''}</td>
+      <td><b>${r.cumulative[nm] ?? 0}</b></td>
+    </tr>`;
   });
-  html+=`</tbody></table>`;
+  html += `</tbody></table>`;
+
   if (isEnd)
-    html+=`<button class="btn-cta" onclick="showGameEnd()">See Final Results →</button>`;
+    html += `<button class="btn-cta" onclick="showGameEnd()">See Final Results →</button>`;
   else if (isHost)
-    html+=`<button class="btn-cta" onclick="nextRound()">▶ Next Round (${S.round+1}/${S.max_rounds})</button>`;
+    html += `<button class="btn-cta" onclick="nextRound()">▶ Next Round (${S.round + 1}/${S.max_rounds})</button>`;
   else
-    html+=`<p style="text-align:center;color:rgba(255,255,255,.5);font-size:.85rem;margin-top:8px">⏳ Waiting for host to start next round…</p>`;
-  document.getElementById('ov-rbox').innerHTML=html;
+    html += `<p style="text-align:center;color:rgba(255,255,255,.5);font-size:.85rem;margin-top:8px">⏳ Waiting for host to start next round…</p>`;
+
+  document.getElementById('ov-rbox').innerHTML = html;
 }
 
 // ── Game end overlay ──────────────────────────────────────────
 function showGameEnd() {
   hide('ov-round'); show('ov-game');
-  const sorted=[...S.players].sort((a,b)=>a.score-b.score);
-  const medals=['🥇','🥈','🥉'], winner=sorted[0];
-  let html=`<div class="ov-title">🏆 Game Over!</div>
+  const sorted  = [...S.players].sort((a,b) => a.score - b.score);
+  const medals  = ['🥇','🥈','🥉'];
+  const winner  = sorted[0];
+  let html = `<div class="ov-title">🏆 Game Over!</div>
     <div class="game-win-banner">
       And the ultimate winner of the game isssss…<br/>
-      <span class="ultimate-winner">${winner.sid===S.my_sid?'🎉 YOU! 🎉':winner.name}</span>
+      <span class="ultimate-winner">${winner.sid === S.my_sid ? '🎉 YOU! 🎉' : winner.name}</span>
       <br/>BOOOOOOMMM! 🎆
     </div>
     <table class="rtbl"><thead><tr><th>Rank</th><th>Player</th><th>Total Score</th></tr></thead><tbody>`;
-  sorted.forEach((p,i)=>{
-    html+=`<tr class="${i===0?'win-row':''} ${p.sid===S.my_sid?'me-row':''}">
-      <td>${medals[i]||`${i+1}.`}</td><td>${p.sid===S.my_sid?'You':p.name}</td><td>${p.score}</td></tr>`;
+  sorted.forEach((p, i) => {
+    html += `<tr class="${i === 0 ? 'win-row' : ''} ${p.sid === S.my_sid ? 'me-row' : ''}">
+      <td>${medals[i] || `${i + 1}.`}</td>
+      <td>${p.sid === S.my_sid ? 'You' : p.name}</td>
+      <td>${p.score}</td>
+    </tr>`;
   });
-  html+=`</tbody></table><button class="btn-cta" onclick="window.location.href='/'">← Play Again</button>`;
-  document.getElementById('ov-gbox').innerHTML=html;
+  html += `</tbody></table><button class="btn-cta" onclick="window.location.href='/'">← Play Again</button>`;
+  document.getElementById('ov-gbox').innerHTML = html;
   startConfetti();
 }
 
 // ── Helpers ───────────────────────────────────────────────────
-function isMyTurn(){return S&&S.current_player_sid===S.my_sid;}
-function setDis(id,dis){const e=document.getElementById(id);if(e)e.disabled=dis;}
-function show(id){document.getElementById(id)?.classList.remove('hidden');}
-function hide(id){document.getElementById(id)?.classList.add('hidden');}
-function toast(msg,type='info'){
-  const el=document.getElementById('toast');
-  el.textContent=msg; el.className=`toast toast-${type}`;
-  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.add('hidden'),3500);
+function isMyTurn() { return S && S.current_player_sid === S.my_sid; }
+function setDis(id, dis) { const e = document.getElementById(id); if(e) e.disabled = dis; }
+function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
+function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
+function toast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast toast-${type}`;
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.add('hidden'), 3500);
 }
-function cHTML(c,small=false,glow=false){
-  const col=isRed(c.suit)?'red':'blk', sm=small?' card-sm':'', gl=glow?' take-glow':'';
-  const fn=glow?`onclick="document.getElementById('btn-take').click()"` :'';
+function cHTML(c, small=false, glow=false) {
+  const col = isRed(c.suit) ? 'red' : 'blk', sm = small ? ' card-sm' : '', gl = glow ? ' take-glow' : '';
+  const fn  = glow ? `onclick="document.getElementById('btn-take').click()"` : '';
   return `<div class="card card-face ${col}${sm}${gl}" ${fn}>
     <div class="cc tl">${c.value}<br/>${SYM[c.suit]}</div>
     <div class="card-mid">${SYM[c.suit]}</div>
     <div class="cc br">${c.value}<br/>${SYM[c.suit]}</div>
   </div>`;
 }
-function startConfetti(){
-  const cv=document.getElementById('confetti-canvas');
-  const W=cv.width=innerWidth, H=cv.height=innerHeight, ctx=cv.getContext('2d');
-  const C=['#c9a84c','#e8c96a','#2ecc71','#3498db','#e74c3c','#9b59b6','#f39c12'];
-  const ps=Array.from({length:200},()=>({
-    x:Math.random()*W, y:Math.random()*H-H, w:Math.random()*13+5, h:Math.random()*6+3,
-    vx:(Math.random()-.5)*3, vy:Math.random()*4+2, r:Math.random()*Math.PI*2, vr:(Math.random()-.5)*.17,
-    c:C[Math.floor(Math.random()*C.length)],
+
+// ── Confetti ──────────────────────────────────────────────────
+function startConfetti() {
+  const cv  = document.getElementById('confetti-canvas');
+  const W   = cv.width = innerWidth, H = cv.height = innerHeight;
+  const ctx = cv.getContext('2d');
+  const C   = ['#c9a84c','#e8c96a','#2ecc71','#3498db','#e74c3c','#9b59b6','#f39c12'];
+  const ps  = Array.from({length: 200}, () => ({
+    x: Math.random()*W, y: Math.random()*H - H,
+    w: Math.random()*13 + 5, h: Math.random()*6 + 3,
+    vx: (Math.random()-.5)*3, vy: Math.random()*4 + 2,
+    r: Math.random()*Math.PI*2, vr: (Math.random()-.5)*.17,
+    c: C[Math.floor(Math.random()*C.length)],
   }));
-  function draw(){
+  function draw() {
     ctx.clearRect(0,0,W,H);
-    ps.forEach(p=>{
-      p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;p.vy+=.06;
-      if(p.y>H){p.y=-20;p.x=Math.random()*W;p.vy=Math.random()*3+1;}
-      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);
-      ctx.fillStyle=p.c;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+    ps.forEach(p => {
+      p.x+=p.vx; p.y+=p.vy; p.r+=p.vr; p.vy+=.06;
+      if (p.y > H) { p.y=-20; p.x=Math.random()*W; p.vy=Math.random()*3+1; }
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r);
+      ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore();
     });
-    confRAF=requestAnimationFrame(draw);
+    confRAF = requestAnimationFrame(draw);
   }
-  draw(); setTimeout(()=>{if(confRAF){cancelAnimationFrame(confRAF);confRAF=null;}ctx.clearRect(0,0,W,H);},10000);
+  draw();
+  setTimeout(() => { if(confRAF){cancelAnimationFrame(confRAF);confRAF=null;} ctx.clearRect(0,0,W,H); }, 10000);
 }
+
+/* ── CSS injected at runtime for new states ─────────────────── */
+(function injectStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* SHOW button locked state */
+    #btn-show.show-locked {
+      opacity: 0.45;
+      filter: grayscale(60%);
+      cursor: not-allowed;
+      position: relative;
+    }
+    #btn-show.show-locked::after {
+      content: '🔒';
+      font-size: .7em;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    /* Shake animation for rejected SHOW attempt */
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-6px); }
+      40%      { transform: translateX(6px); }
+      60%      { transform: translateX(-4px); }
+      80%      { transform: translateX(4px); }
+    }
+    .shake { animation: shake 0.55s ease; }
+
+    /* Hint locked style */
+    .hint-locked {
+      color: var(--gold, #c9a84c) !important;
+      font-weight: 600;
+    }
+
+    /* Phase pill locked variant */
+    .pp-locked {
+      background: rgba(180,140,0,.18) !important;
+      color: var(--gold, #c9a84c) !important;
+      border: 1px solid rgba(180,140,0,.4) !important;
+    }
+
+    /* Hand total colour (overridden by JS via style.color) */
+    #htotal { transition: color .3s ease; font-weight: 700; }
+
+    /* Reveal total under opponent's cards */
+    .reveal-total {
+      font-size: .67rem;
+      color: var(--gold, #c9a84c);
+      margin-top: 3px;
+      font-family: 'DM Mono', monospace;
+      text-align: center;
+    }
+
+    /* Leaderboard crown rank */
+    .sb-rank { min-width: 1.4em; text-align: center; }
+  `;
+  document.head.appendChild(style);
+})();
