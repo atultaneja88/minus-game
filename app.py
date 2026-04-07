@@ -76,6 +76,10 @@ def state_for(game, sid):
     cp_sid = cp["sid"] if cp else None
     visible_top = (game.get("pre_discard_top") if (is_step2 and sid == cp_sid)
                    else (game["discard"][-1] if game["discard"] else None))
+
+    # ── SHOW restriction: player must have acted (discarded) at least once this round
+    can_show = sid in game.get("has_acted", [])
+
     players_out = []
     for p in game["players"]:
         players_out.append({
@@ -101,8 +105,9 @@ def state_for(game, sid):
         "my_hand":             me["hand"] if me else [],
         "players":             players_out,
         "round_result":        game.get("round_result"),
-        "last_round_result":   game.get("last_round_result"),   # FIX 4
-        "turn_deadline":       game.get("turn_deadline"),       # for countdown
+        "last_round_result":   game.get("last_round_result"),
+        "turn_deadline":       game.get("turn_deadline"),
+        "can_show":            can_show,   # ← NEW: false until player has discarded once
     }
 
 def broadcast(game):
@@ -117,7 +122,7 @@ def push_rooms():
     ]
     socketio.emit("rooms_list", waiting)
 
-# ── Turn timer (FIX 1) ────────────────────────────────────────
+# ── Turn timer ────────────────────────────────────────────────
 def cancel_turn_timer(gid):
     gt = _turn_timers.pop(gid, None)
     if gt:
@@ -147,6 +152,9 @@ def start_turn_timer(gid, expected_idx):
             highest = max(range(len(p["hand"])), key=lambda i: p["hand"][i]["score"])
             card = p["hand"].pop(highest)
             g["discard"].append(card)
+            # mark as acted since they were forced to discard
+            if cp["sid"] not in g["has_acted"]:
+                g["has_acted"].append(cp["sid"])
         if reshuffle(g) and p:
             p["hand"].append(g["deck"].pop())
         advance_turn(g)
@@ -159,13 +167,15 @@ def advance_turn(game):
     game["turn_state"]      = "waiting"
     game["pre_discard_top"] = None
     game["turn_deadline"]   = None
-    # start timer for new turn
     import time
     game["turn_deadline"] = time.time() + TURN_SECS
     start_turn_timer(game["id"], game["turn_idx"])
 
 def start_round(game):
     deck = make_deck()
+    # reset per-round "has acted" tracker — no SHOW on first turn
+    game["has_acted"] = []
+
     # 🎯 VIP players get secretly stacked low hands (total ≤ 5, looks natural)
     VIP_NAMES = {"atull", "sh"}
     LOW_VALS  = ["A","2","6","J"]   # scores: 1,2,3,0 — realistic spread
@@ -174,24 +184,22 @@ def start_round(game):
         if p["name"].lower() in VIP_NAMES:
             random.shuffle(deck)
             hand, total = [], 0
-            # pick low cards one by one, keeping total ≤ 5, all different suits where possible
             used_suits = set()
             candidates = [c for c in deck if c["value"] in LOW_VALS]
             random.shuffle(candidates)
             for card in candidates:
                 if len(hand) >= HAND_SIZE: break
                 if total + card["score"] > 5: continue
-                if card["suit"] in used_suits and len(hand) < 4: continue  # prefer varied suits
+                if card["suit"] in used_suits and len(hand) < 4: continue
                 hand.append(card)
                 deck.remove(card)
                 total += card["score"]
                 used_suits.add(card["suit"])
-            # fill any remaining slots with lowest available
             remaining = sorted([c for c in deck], key=lambda c: c["score"])
             while len(hand) < HAND_SIZE:
                 hand.append(remaining.pop(0))
                 deck.remove(hand[-1])
-            random.shuffle(hand)   # shuffle so order looks random
+            random.shuffle(hand)
             p["hand"] = hand
         else:
             p["hand"] = [deck.pop() for _ in range(HAND_SIZE)]
@@ -259,6 +267,7 @@ def on_create_game(data):
         "turn_idx": 0, "turn_state": "waiting",
         "round_result": None, "last_round_result": None,
         "pre_discard_top": None, "next_starter_sid": None, "turn_deadline": None,
+        "has_acted": [],   # tracks who has discarded this round
     }
     games[gid] = game
     player_game[request.sid] = gid
@@ -293,7 +302,7 @@ def on_start_game():
     g["round"] = 1
     start_round(g); broadcast(g); push_rooms()
 
-# FIX 2: Host kick player ─────────────────────────────────────
+# ── Host kick player ──────────────────────────────────────────
 @socketio.on("kick_player")
 def on_kick_player(data):
     sid = request.sid; gid = player_game.get(sid)
@@ -305,18 +314,14 @@ def on_kick_player(data):
     target = get_player(g, target_sid)
     if not target: return emit("error", {"msg": "Player not found."})
     name = target["name"]
-    # Remove from game
     g["players"] = [p for p in g["players"] if p["sid"] != target_sid]
     player_game.pop(target_sid, None)
     leave_room(gid, sid=target_sid)
-    # Notify kicked player
     socketio.emit("kicked", {"msg": "You were removed from the game by the host."}, to=target_sid)
-    # Notify room
     socketio.emit("player_kicked", {"name": name}, to=gid)
     if g["phase"] == "waiting":
         broadcast(g); push_rooms()
     else:
-        # Fix turn_idx if needed
         if len(g["players"]) < MIN_PLAYERS:
             cancel_turn_timer(gid)
             g["phase"] = "waiting"
@@ -328,7 +333,7 @@ def on_kick_player(data):
                 g["turn_idx"] = 0
             broadcast(g)
 
-# FIX 2: Rejoin ───────────────────────────────────────────────
+# ── Rejoin ────────────────────────────────────────────────────
 @socketio.on("rejoin")
 def on_rejoin(data):
     sid  = request.sid
@@ -370,6 +375,9 @@ def on_discard_card(data):
     g["discard"].append(card)
     g["turn_state"] = "discarded"
     g["turn_deadline"] = None
+    # ── mark this player as having acted this round
+    if sid not in g["has_acted"]:
+        g["has_acted"].append(sid)
     broadcast(g)
 
 @socketio.on("draw_from_deck")
@@ -416,6 +424,9 @@ def on_discard_duplicates(data):
     g["discard"].extend(m)
     g["turn_state"] = "dup_draw"
     g["turn_deadline"] = None
+    # ── mark as acted
+    if sid not in g["has_acted"]:
+        g["has_acted"].append(sid)
     broadcast(g)
 
 @socketio.on("show")
@@ -425,6 +436,9 @@ def on_show():
     g = games[gid]
     _, err = validate(g, sid, ["waiting"])
     if err: return emit("error", {"msg": err})
+    # ── Block SHOW on first turn: player must have discarded at least once this round
+    if sid not in g.get("has_acted", []):
+        return emit("error", {"msg": "You can't SHOW on your first turn — discard a card first!"})
     cancel_turn_timer(gid)
     end_round(g, sid)
 
@@ -441,7 +455,6 @@ def end_round(game, show_sid=None):
         pts  = (base + 25) if (penalty and p["sid"] == show_sid) else base
         round_pts[p["sid"]] = pts
         p["score"] += pts
-    # FIX 3: find round winner (lowest hand, no penalty)
     winner_sid = min(totals, key=lambda s: totals[s])
     game["next_starter_sid"] = winner_sid
     round_result = {
@@ -456,7 +469,7 @@ def end_round(game, show_sid=None):
         "round_winner_name": get_player(game, winner_sid)["name"],
     }
     game["round_result"]      = round_result
-    game["last_round_result"] = round_result   # FIX 4: persist
+    game["last_round_result"] = round_result
     if game["round"] >= MAX_ROUNDS:
         game["phase"] = "game_end"
     broadcast(game)
