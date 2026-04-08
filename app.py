@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()
+# import eventlet
+# eventlet.monkey_patch()
 
 import os, random, uuid, json, threading
 from flask import Flask, render_template, request
@@ -7,7 +7,12 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "minus-secret-change-me")
-socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
+# socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading"
+)
 
 # ── View counter ─────────────────────────────────────────────
 _VIEW_FILE = '/tmp/minus_views.json'
