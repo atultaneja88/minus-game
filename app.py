@@ -491,4 +491,4 @@ def on_request_state():
     else:                    emit("no_game", {})
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+    socketio.run(app, debug=True, host="0.0.0.0", port=10000)
