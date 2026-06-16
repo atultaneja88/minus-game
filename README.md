@@ -174,3 +174,6 @@ minus-game/
     └── js/
         └── game.js     ← Real-time client
 ```
+
+game link -
+https://minus-game-1.onrender.com
